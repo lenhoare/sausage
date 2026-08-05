@@ -1,9 +1,14 @@
 package dev.sausage.runtime
 
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -14,36 +19,43 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private var webView: WebView? = null
+    private var screen = Screen.HOME
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureWindow()
 
         root = FrameLayout(this).apply {
-            setBackgroundColor(Color.rgb(7, 16, 30))
+            setBackgroundColor(BACKGROUND)
         }
         setContentView(root)
+        configureBackNavigation()
+        showHome()
+    }
 
-        val loader = SausageDocumentLoader(assets)
-        if (!loader.bundledDocumentExists()) {
-            showError(getString(R.string.document_load_error_message))
-            return
+    private fun configureBackNavigation() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                ::handleBack,
+            )
         }
-
-        showDocument(loader)
     }
 
     @Suppress("DEPRECATION")
     private fun configureWindow() {
         window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.rgb(7, 16, 30)
+        window.navigationBarColor = BACKGROUND
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
@@ -55,9 +67,199 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun showHome() {
+        clearScreen()
+        screen = Screen.HOME
+
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(32), dp(64), dp(32), dp(40))
+        }
+
+        content.addView(
+            ImageView(this).apply {
+                setImageResource(R.drawable.ic_sausage)
+                contentDescription = null
+            },
+            linearParams(dp(88), dp(88)),
+        )
+        content.addView(
+            TextView(this).apply {
+                text = getString(R.string.home_eyebrow)
+                setTextColor(ACCENT)
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                letterSpacing = 0.22f
+                gravity = Gravity.CENTER
+            },
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = ViewGroup.LayoutParams.WRAP_CONTENT,
+                topMargin = dp(24),
+            ),
+        )
+        content.addView(
+            TextView(this).apply {
+                text = getString(R.string.home_title)
+                setTextColor(Color.WHITE)
+                textSize = 32f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+            },
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = ViewGroup.LayoutParams.WRAP_CONTENT,
+                topMargin = dp(10),
+            ),
+        )
+        content.addView(
+            TextView(this).apply {
+                text = getString(R.string.home_description)
+                setTextColor(MUTED_TEXT)
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setLineSpacing(0f, 1.25f)
+            },
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = ViewGroup.LayoutParams.WRAP_CONTENT,
+                topMargin = dp(16),
+            ),
+        )
+
+        content.addView(
+            actionButton(
+                label = getString(R.string.open_document),
+                primary = true,
+                onClick = ::openDocumentPicker,
+            ).apply {
+                contentDescription = getString(R.string.open_document_accessibility)
+            },
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = dp(58),
+                topMargin = dp(38),
+            ),
+        )
+        content.addView(
+            actionButton(
+                label = getString(R.string.open_sample),
+                primary = false,
+                onClick = ::openBundledDocument,
+            ),
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = dp(58),
+                topMargin = dp(14),
+            ),
+        )
+        content.addView(
+            TextView(this).apply {
+                text = getString(R.string.home_footer)
+                setTextColor(SUBTLE_TEXT)
+                textSize = 12f
+                gravity = Gravity.CENTER
+            },
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = ViewGroup.LayoutParams.WRAP_CONTENT,
+                topMargin = dp(28),
+            ),
+        )
+
+        scrollView.addView(
+            content,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        root.addView(
+            scrollView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+    }
+
+    private fun openDocumentPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+
+        try {
+            startActivityForResult(intent, OPEN_DOCUMENT_REQUEST)
+        } catch (error: Exception) {
+            showError("Android could not open the document picker.")
+            Log.e(TAG, "Unable to open document picker", error)
+        }
+    }
+
+    @Deprecated("Kept dependency-free for the initial Android runtime slices")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?,
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != OPEN_DOCUMENT_REQUEST || resultCode != RESULT_OK) return
+
+        val uri = data?.data ?: run {
+            showError("Android did not return a document.")
+            return
+        }
+
+        try {
+            val canPersist = data.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0
+            val canRead = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0
+            if (canPersist && canRead) {
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                } catch (error: SecurityException) {
+                    Log.w(TAG, "The document provider did not offer persistent access", error)
+                }
+            }
+
+            val document = SausageDocumentReader.fromUri(contentResolver, uri)
+            Log.i(TAG, "Opening external document: ${document.displayName}")
+            showDocument(document)
+        } catch (error: SausageDocumentException) {
+            Log.w(TAG, "Rejected external document", error)
+            showError(error.message ?: "The selected document could not be opened.")
+        }
+    }
+
+    private fun openBundledDocument() {
+        try {
+            val document = SausageDocumentReader.fromAsset(assets, BUNDLED_DOCUMENT)
+            Log.i(TAG, "Opening bundled document: ${document.displayName}")
+            showDocument(document)
+        } catch (error: SausageDocumentException) {
+            Log.e(TAG, "Unable to open bundled document", error)
+            showError(error.message ?: getString(R.string.document_load_error_message))
+        }
+    }
+
     @Suppress("SetJavaScriptEnabled")
-    private fun showDocument(loader: SausageDocumentLoader) {
+    private fun showDocument(document: SausageDocument) {
+        clearScreen()
+        screen = Screen.DOCUMENT
+        val loader = SausageDocumentLoader(document)
+
         val view = WebView(this).apply {
+            contentDescription = getString(R.string.document_accessibility, document.displayName)
             setBackgroundColor(Color.TRANSPARENT)
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
@@ -88,6 +290,11 @@ class MainActivity : Activity() {
                     view: WebView,
                     request: WebResourceRequest,
                 ): WebResourceResponse = loader.responseFor(request.url)
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    view.evaluateJavascript(APPLY_RUNTIME_STYLES_SCRIPT, null)
+                    Log.i(TAG, "Rendered ${document.displayName}")
+                }
 
                 override fun onReceivedError(
                     view: WebView,
@@ -124,27 +331,42 @@ class MainActivity : Activity() {
     }
 
     private fun showError(message: String) {
-        root.removeAllViews()
+        clearScreen()
+        screen = Screen.ERROR
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(32), dp(32), dp(32), dp(32))
+            setPadding(dp(32), dp(64), dp(32), dp(40))
 
             addView(TextView(context).apply {
                 text = getString(R.string.document_load_error_title)
                 setTextColor(Color.WHITE)
                 textSize = 24f
+                typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
             })
 
             addView(TextView(context).apply {
                 text = message
-                setTextColor(Color.rgb(174, 190, 213))
+                setTextColor(MUTED_TEXT)
                 textSize = 16f
                 gravity = Gravity.CENTER
                 setPadding(0, dp(12), 0, 0)
             })
+
+            addView(
+                actionButton(
+                    label = getString(R.string.back_home),
+                    primary = true,
+                    onClick = ::showHome,
+                ),
+                linearParams(
+                    width = ViewGroup.LayoutParams.MATCH_PARENT,
+                    height = dp(58),
+                    topMargin = dp(30),
+                ),
+            )
         }
 
         root.addView(
@@ -156,17 +378,85 @@ class MainActivity : Activity() {
         )
     }
 
+    private fun actionButton(
+        label: String,
+        primary: Boolean,
+        onClick: () -> Unit,
+    ): Button = Button(this).apply {
+        text = label
+        isAllCaps = false
+        textSize = 15f
+        typeface = Typeface.DEFAULT_BOLD
+        setTextColor(if (primary) BACKGROUND else Color.WHITE)
+        setPadding(dp(18), 0, dp(18), 0)
+        minHeight = 0
+        minimumHeight = 0
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(18).toFloat()
+            setColor(if (primary) ACCENT else PANEL)
+            if (!primary) setStroke(dp(1), BORDER)
+        }
+        setOnClickListener { onClick() }
+    }
+
+    private fun linearParams(
+        width: Int,
+        height: Int,
+        topMargin: Int = 0,
+    ) = LinearLayout.LayoutParams(width, height).apply {
+        this.topMargin = topMargin
+    }
+
+    private fun clearScreen() {
+        webView?.let { view ->
+            webView = null
+            root.removeView(view)
+            view.stopLoading()
+            view.destroy()
+        }
+        root.removeAllViews()
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    override fun onDestroy() {
-        webView?.apply {
-            stopLoading()
-            loadUrl("about:blank")
-            clearHistory()
-            root.removeView(this)
-            destroy()
+    @SuppressLint("GestureBackNavigation")
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onBackPressed() {
+        handleBack()
+    }
+
+    private fun handleBack() {
+        if (screen != Screen.HOME) {
+            showHome()
+        } else {
+            finishAfterTransition()
         }
-        webView = null
+    }
+
+    override fun onDestroy() {
+        clearScreen()
         super.onDestroy()
+    }
+
+    private enum class Screen {
+        HOME,
+        DOCUMENT,
+        ERROR,
+    }
+
+    companion object {
+        private const val APPLY_RUNTIME_STYLES_SCRIPT =
+            "document.documentElement.style.setProperty('-webkit-tap-highlight-color', 'transparent')"
+        private const val TAG = "Sausage"
+        private const val OPEN_DOCUMENT_REQUEST = 1001
+        private const val BUNDLED_DOCUMENT = "first-card.svge"
+
+        private val BACKGROUND = Color.rgb(7, 16, 30)
+        private val PANEL = Color.rgb(16, 36, 59)
+        private val BORDER = Color.rgb(55, 77, 103)
+        private val ACCENT = Color.rgb(246, 191, 118)
+        private val MUTED_TEXT = Color.rgb(174, 190, 213)
+        private val SUBTLE_TEXT = Color.rgb(116, 139, 166)
     }
 }
