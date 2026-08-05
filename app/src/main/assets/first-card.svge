@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:app="https://sausage.dev/ns/app/1"
+     viewBox="0 0 390 844"
+     width="100%"
+     height="100%"
+     preserveAspectRatio="xMidYMid meet">
+  <metadata>
+    <app:manifest
+        id="dev.sausage.journey-card"
+        name="Journey Card"
+        version="0.0.1"
+        profile-version="1" />
+  </metadata>
+
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07101e" />
+      <stop offset="0.52" stop-color="#10243b" />
+      <stop offset="1" stop-color="#1b3150" />
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffd89a" stop-opacity="0.42" />
+      <stop offset="0.48" stop-color="#afcdfb" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#5d80b6" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#fffaf0" />
+      <stop offset="1" stop-color="#efe8dc" />
+    </linearGradient>
+    <linearGradient id="button" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#efaa65" />
+      <stop offset="1" stop-color="#dd7e59" />
+    </linearGradient>
+    <filter id="soft-shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#020812" flood-opacity="0.48" />
+    </filter>
+    <filter id="moon-glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="12" />
+    </filter>
+    <pattern id="grain" width="56" height="56" patternUnits="userSpaceOnUse">
+      <circle cx="8" cy="13" r="0.65" fill="#ffffff" opacity="0.2" />
+      <circle cx="39" cy="27" r="0.45" fill="#ffffff" opacity="0.14" />
+      <circle cx="24" cy="48" r="0.55" fill="#ffffff" opacity="0.12" />
+    </pattern>
+  </defs>
+
+  <style><![CDATA[
+    text {
+      font-family: Inter, Roboto, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+
+    #card-shell {
+      cursor: pointer;
+      outline: none;
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 560ms cubic-bezier(.2, .85, .24, 1);
+    }
+
+    .face {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: opacity 320ms ease, transform 560ms cubic-bezier(.2, .85, .24, 1);
+    }
+
+    #front {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    #back {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(16px) scale(.985);
+    }
+
+    #scene.revealed #card-shell {
+      transform: translateY(-7px) rotate(-0.4deg);
+    }
+
+    #scene.revealed #front {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-14px) scale(.985);
+    }
+
+    #scene.revealed #back {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    #tap-ring {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: breathe 2.8s ease-in-out infinite;
+    }
+
+    .star-a { animation: twinkle 3.1s ease-in-out infinite; }
+    .star-b { animation: twinkle 4.2s 900ms ease-in-out infinite; }
+    .star-c { animation: twinkle 3.7s 1.4s ease-in-out infinite; }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); opacity: .52; }
+      50% { transform: scale(1.08); opacity: .9; }
+    }
+
+    @keyframes twinkle {
+      0%, 100% { opacity: .25; }
+      50% { opacity: .95; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #card-shell, .face { transition-duration: 1ms; }
+      #tap-ring, .star-a, .star-b, .star-c { animation: none; }
+    }
+  ]]></style>
+
+  <g id="scene">
+    <rect width="390" height="844" fill="url(#sky)" />
+    <rect width="390" height="844" fill="url(#grain)" />
+
+    <circle cx="195" cy="191" r="132" fill="url(#halo)" />
+    <circle cx="195" cy="182" r="43" fill="#f8dba8" opacity="0.18" filter="url(#moon-glow)" />
+    <circle cx="195" cy="182" r="31" fill="#f9e2b8" />
+    <circle cx="208" cy="171" r="29" fill="#10243b" />
+
+    <g fill="#dbeaff">
+      <circle class="star-a" cx="77" cy="157" r="1.7" />
+      <circle class="star-b" cx="315" cy="126" r="1.3" />
+      <circle class="star-c" cx="287" cy="211" r="1.8" />
+      <circle class="star-b" cx="112" cy="230" r="1.1" />
+      <circle class="star-c" cx="340" cy="279" r="1.2" />
+      <circle class="star-a" cx="47" cy="278" r="1.1" />
+    </g>
+
+    <text x="28" y="62" fill="#9fb5cf" font-size="11" font-weight="700" letter-spacing="2.6">NIGHT SCHOOL</text>
+    <text x="362" y="62" fill="#9fb5cf" font-size="11" font-weight="700" text-anchor="end">01 / 07</text>
+
+    <g aria-label="Journey progress">
+      <rect x="28" y="82" width="334" height="3" rx="1.5" fill="#ffffff" opacity="0.12" />
+      <rect x="28" y="82" width="48" height="3" rx="1.5" fill="#efaa65" />
+    </g>
+
+    <text x="195" y="266" fill="#cfdef0" font-size="13" font-weight="600" text-anchor="middle" letter-spacing="1.8">LUCID FOUNDATIONS</text>
+
+    <g id="card-shell"
+       role="button"
+       tabindex="0"
+       aria-label="Reveal this journey card"
+       aria-pressed="false">
+      <rect x="24" y="293" width="342" height="410" rx="28" fill="#040a13" opacity="0.32" filter="url(#soft-shadow)" />
+      <rect x="24" y="281" width="342" height="410" rx="28" fill="url(#card)" />
+      <rect x="25" y="282" width="340" height="408" rx="27" fill="none" stroke="#ffffff" stroke-opacity="0.55" />
+
+      <g id="front" class="face">
+        <rect x="52" y="318" width="112" height="27" rx="13.5" fill="#18334d" />
+        <text x="108" y="336" fill="#f5dfbb" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1.5">REALITY CHECK</text>
+
+        <text x="52" y="397" fill="#172b3d" font-size="38" font-weight="700">
+          <tspan x="52" dy="0">Notice the</tspan>
+          <tspan x="52" dy="43">impossible.</tspan>
+        </text>
+
+        <text x="52" y="504" fill="#586978" font-size="16">
+          <tspan x="52" dy="0">Dreams often contain something</tspan>
+          <tspan x="52" dy="25">that cannot quite be true.</tspan>
+        </text>
+
+        <line x1="52" y1="574" x2="338" y2="574" stroke="#172b3d" stroke-opacity="0.12" />
+
+        <g id="tap-ring">
+          <circle cx="70" cy="624" r="20" fill="#efaa65" opacity="0.2" />
+          <circle cx="70" cy="624" r="8" fill="#dd7e59" />
+        </g>
+        <text x="103" y="630" fill="#20384b" font-size="13" font-weight="700" letter-spacing="0.7">TAP TO REVEAL</text>
+      </g>
+
+      <g id="back" class="face">
+        <rect x="52" y="318" width="90" height="27" rx="13.5" fill="#dce6e1" />
+        <text x="97" y="336" fill="#315a57" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1.5">TRY THIS</text>
+
+        <text x="52" y="392" fill="#172b3d" font-size="31" font-weight="700">
+          <tspan x="52" dy="0">Ask yourself:</tspan>
+          <tspan x="52" dy="40">“Am I dreaming?”</tspan>
+        </text>
+
+        <text x="52" y="496" fill="#586978" font-size="16">
+          <tspan x="52" dy="0">Look at your hands. Count your</tspan>
+          <tspan x="52" dy="25">fingers, then look away and back.</tspan>
+          <tspan x="52" dy="25">In a dream, details often shift.</tspan>
+        </text>
+
+        <rect x="52" y="593" width="286" height="58" rx="18" fill="url(#button)" />
+        <text x="195" y="628" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0.8">GOT IT — TURN BACK</text>
+      </g>
+    </g>
+
+    <text x="195" y="750" fill="#8fa7c2" font-size="12" text-anchor="middle">A small practice for a more aware night</text>
+    <circle cx="181" cy="785" r="3" fill="#efaa65" />
+    <circle cx="195" cy="785" r="3" fill="#ffffff" opacity="0.22" />
+    <circle cx="209" cy="785" r="3" fill="#ffffff" opacity="0.22" />
+  </g>
+
+  <script type="application/ecmascript"><![CDATA[
+    (() => {
+      const scene = document.getElementById('scene');
+      const card = document.getElementById('card-shell');
+
+      const toggleCard = () => {
+        const revealed = scene.classList.toggle('revealed');
+        card.setAttribute('aria-pressed', String(revealed));
+        card.setAttribute(
+          'aria-label',
+          revealed ? 'Turn the journey card back' : 'Reveal this journey card'
+        );
+      };
+
+      card.addEventListener('click', toggleCard);
+      card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleCard();
+        }
+      });
+    })();
+  ]]></script>
+</svg>

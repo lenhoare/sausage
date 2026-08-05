@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sausage</string>
+    <string name="document_load_error_title">Couldn’t open this journey</string>
+    <string name="document_load_error_message">The bundled Sausage document could not be loaded.</string>
+</resources>
+
