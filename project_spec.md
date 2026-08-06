@@ -547,7 +547,7 @@ Android's Back gesture/button:
 2. navigates back within the Sausage application;
 3. closes the application when the stack is empty, unless intercepted.
 
-### 10.3 Document links — DECIDED
+### 10.3 Document links — DECIDED / INITIAL BUNDLED BASELINE PROVEN
 
 Version 1 MUST support navigation to another Sausage document. Authors SHOULD use ordinary SVG links:
 
@@ -582,6 +582,10 @@ A linked document belongs to the same application when it resolves inside the ru
 Each document has its own SVG DOM and JavaScript context. Documents do not share JavaScript globals. Application state that must cross document boundaries SHOULD use key-value storage or SQLite.
 
 The runtime maintains a document back stack, so Android Back returns to the previous `.svge` file. Preservation of an inactive document's in-memory DOM and JavaScript state is best-effort; applications MUST persist important state.
+
+The initial cross-document baseline is proven through the bundled Dream Note application. `sausage.navigation.open("dream-journal.svge")` resolves a safe sibling path inside the bundled application root, requires the destination to use `.svge` and declare the same manifest application ID, creates a fresh renderer context, and pushes the current document onto a native back stack. The linked journal reads the same application-scoped SQLite database. `sausage.navigation.back()` and Android Back return to the previous document, which is currently reloaded rather than kept alive in memory.
+
+This baseline intentionally rejects absolute paths, URI schemes, fragments, queries, parent-directory traversal and linked navigation from user-selected standalone files. Android-approved external directory roots and ordinary SVG `<a>` interception remain later slices.
 
 ---
 
@@ -861,6 +865,8 @@ The root MAY be:
 - a future packaged application.
 
 Selecting or sharing one external `.svge` document does not necessarily grant access to sibling files. If that document requires relative sibling resources, Sausage SHOULD offer to let the user select its application directory or import it into managed storage.
+
+Bundled sibling documents now provide the initial application-root implementation. They share a manifest application ID, storage and SQLite while retaining isolated document DOM and script contexts. This establishes the navigation semantics before Android directory approval and import UX are added.
 
 ### 17.3 Package format — DEFERRED / OPEN
 

@@ -30,12 +30,16 @@ The twelfth slice adds `app:slider`, the first numeric standard control. Its fin
 
 The thirteenth slice adds an application-isolated SQLite database through promise-based `sausage.db.execute(sql, parameters)` and `sausage.db.query(sql, parameters)`. Calls accept one parameterised statement at a time and return ordinary JavaScript objects and values without exposing Android database classes. Dream Note now creates its own journal table, stores a typed snapshot whenever a dream is held, queries the persisted entry count and displays that history on the review screen.
 
+The fourteenth slice proves navigation between separate Sausage documents. Dream Note opens a sibling [`dream-journal.svge`](app/src/main/assets/dream-journal.svge) through `sausage.navigation.open(path)`; Sausage validates the relative path and matching manifest application ID, gives the journal a fresh SVG DOM and JavaScript context, and places the previous document on a native back stack. The journal queries the same private SQLite database and fills three existing graphical memory cards. `sausage.navigation.back()` and Android Back return to the previous document.
+
 Current external-document limits:
 
 - maximum size of 5 MB;
 - UTF-8 XML with an SVG root;
 - no document type declaration;
 - self-contained resources only.
+
+Relative multi-document navigation is currently proven only for documents bundled inside Sausage. User-selected directory roots remain a later slice.
 
 ## Build
 

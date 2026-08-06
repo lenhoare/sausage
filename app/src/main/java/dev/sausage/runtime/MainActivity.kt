@@ -26,11 +26,14 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.ArrayDeque
 
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private var webView: WebView? = null
     private var databaseBridge: SausageDatabaseBridge? = null
+    private var currentDocument: SausageDocument? = null
+    private val documentBackStack = ArrayDeque<SausageDocument>()
     private var screen = Screen.HOME
     private var keyboardInsetBottom = 0
 
@@ -96,6 +99,7 @@ class MainActivity : Activity() {
 
     private fun showHome() {
         clearScreen()
+        documentBackStack.clear()
         screen = Screen.HOME
 
         val scrollView = ScrollView(this).apply {
@@ -273,7 +277,7 @@ class MainActivity : Activity() {
 
             val document = SausageDocumentReader.fromUri(contentResolver, uri)
             Log.i(TAG, "Opening external document: ${document.displayName}")
-            showDocument(document)
+            showInitialDocument(document)
         } catch (error: SausageDocumentException) {
             Log.w(TAG, "Rejected external document", error)
             showError(error.message ?: "The selected document could not be opened.")
@@ -292,7 +296,7 @@ class MainActivity : Activity() {
         try {
             val document = SausageDocumentReader.fromAsset(assets, assetName)
             Log.i(TAG, "Opening bundled document: ${document.displayName}")
-            showDocument(document)
+            showInitialDocument(document)
         } catch (error: SausageDocumentException) {
             Log.e(TAG, "Unable to open bundled document", error)
             showError(error.message ?: getString(R.string.document_load_error_message))
@@ -300,12 +304,38 @@ class MainActivity : Activity() {
     }
 
     @Suppress("SetJavaScriptEnabled")
+    private fun showInitialDocument(document: SausageDocument) {
+        documentBackStack.clear()
+        showDocument(document)
+    }
+
+    @Suppress("SetJavaScriptEnabled")
     private fun showDocument(document: SausageDocument) {
         clearScreen()
         screen = Screen.DOCUMENT
+        currentDocument = document
         val loader = SausageDocumentLoader(document)
         val documentDatabase = SausageDatabaseBridge(this, document.storageScope)
         databaseBridge = documentDatabase
+        val documentNavigation = SausageNavigationBridge(
+            assets = assets,
+            currentDocument = document,
+            openDocument = { destination ->
+                runOnUiThread {
+                    if (screen == Screen.DOCUMENT && currentDocument === document) {
+                        documentBackStack.addLast(document)
+                        showDocument(destination)
+                    }
+                }
+            },
+            goBack = {
+                runOnUiThread {
+                    if (screen == Screen.DOCUMENT && currentDocument === document) {
+                        navigateDocumentBack()
+                    }
+                }
+            },
+        )
 
         val view = WebView(this).apply {
             contentDescription = getString(R.string.document_accessibility, document.displayName)
@@ -336,6 +366,10 @@ class MainActivity : Activity() {
             addJavascriptInterface(
                 documentDatabase,
                 SausageDatabaseBridge.JAVASCRIPT_NAME,
+            )
+            addJavascriptInterface(
+                documentNavigation,
+                SausageNavigationBridge.JAVASCRIPT_NAME,
             )
 
             webViewClient = object : WebViewClient() {
@@ -394,6 +428,7 @@ class MainActivity : Activity() {
 
     private fun showError(message: String) {
         clearScreen()
+        documentBackStack.clear()
         screen = Screen.ERROR
 
         val content = LinearLayout(this).apply {
@@ -477,10 +512,12 @@ class MainActivity : Activity() {
             view.stopLoading()
             view.removeJavascriptInterface(SausageStorageBridge.JAVASCRIPT_NAME)
             view.removeJavascriptInterface(SausageDatabaseBridge.JAVASCRIPT_NAME)
+            view.removeJavascriptInterface(SausageNavigationBridge.JAVASCRIPT_NAME)
             view.destroy()
         }
         databaseBridge?.close()
         databaseBridge = null
+        currentDocument = null
         root.removeAllViews()
     }
 
@@ -502,13 +539,21 @@ class MainActivity : Activity() {
                 }
                 currentView.evaluateJavascript(HANDLE_DOCUMENT_BACK_SCRIPT) { consumed ->
                     if (consumed != "true" && screen == Screen.DOCUMENT && webView === currentView) {
-                        showHome()
+                        navigateDocumentBack()
                     }
                 }
             }
 
             Screen.ERROR -> showHome()
             Screen.HOME -> finishAfterTransition()
+        }
+    }
+
+    private fun navigateDocumentBack() {
+        if (documentBackStack.isEmpty()) {
+            showHome()
+        } else {
+            showDocument(documentBackStack.removeLast())
         }
     }
 
@@ -530,6 +575,7 @@ class MainActivity : Activity() {
 
               const nativeStorage = window.${SausageStorageBridge.JAVASCRIPT_NAME};
               const nativeDatabase = window.${SausageDatabaseBridge.JAVASCRIPT_NAME};
+              const nativeNavigation = window.${SausageNavigationBridge.JAVASCRIPT_NAME};
               const nativeControls = window.__sausageControls || null;
               const requireKey = (key, kind) => {
                 const value = String(key);
@@ -641,8 +687,33 @@ class MainActivity : Activity() {
                 },
               });
 
+              const navigationResult = (encodedResult) => {
+                const result = JSON.parse(encodedResult);
+                if (!result || result.ok !== true) {
+                  throw new Error(
+                    result && typeof result.error === 'string'
+                      ? result.error
+                      : 'The navigation operation failed.'
+                  );
+                }
+                return result.value;
+              };
+              const navigation = Object.freeze({
+                open(relativePath) {
+                  return Promise.resolve().then(() => {
+                    if (typeof relativePath !== 'string' || relativePath.trim() === '') {
+                      throw new TypeError('A linked document path must be a non-empty string.');
+                    }
+                    return navigationResult(nativeNavigation.open(relativePath));
+                  });
+                },
+                back() {
+                  return Promise.resolve().then(() => navigationResult(nativeNavigation.back()));
+                },
+              });
+
               Object.defineProperty(window, 'sausage', {
-                value: Object.freeze({ storage, controls, db }),
+                value: Object.freeze({ storage, controls, db, navigation }),
                 writable: false,
                 configurable: false,
               });

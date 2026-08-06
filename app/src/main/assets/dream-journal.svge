@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:app="https://sausage.dev/ns/app/1"
+     viewBox="0 0 390 520"
+     width="100%"
+     height="100%"
+     preserveAspectRatio="xMidYMid meet">
+  <metadata>
+    <app:manifest
+        id="dev.sausage.dream-note"
+        name="Dream Journal"
+        version="0.0.1"
+        profile-version="1" />
+    <app:screen id="journal">
+      <app:graphic ref="journal-page" />
+      <app:button label="Return to Dream Note" action="returnToDreamNote" />
+    </app:screen>
+  </metadata>
+
+  <defs>
+    <linearGradient id="journal-night" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07101e" />
+      <stop offset="0.6" stop-color="#10243b" />
+      <stop offset="1" stop-color="#19334f" />
+    </linearGradient>
+    <linearGradient id="journal-card-fill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.035" />
+    </linearGradient>
+  </defs>
+
+  <style>
+    text {
+      font-family: Inter, Roboto, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .journal-card-content {
+      opacity: .38;
+      transition: opacity 300ms ease;
+    }
+    .journal-card-content.loaded {
+      opacity: 1;
+      animation: journal-arrive 420ms ease-out both;
+    }
+    .journal-orbit {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: journal-breathe 5s ease-in-out infinite;
+    }
+    @keyframes journal-arrive {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes journal-breathe {
+      0%, 100% { transform: scale(1); opacity: .7; }
+      50% { transform: scale(1.06); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .journal-card-content.loaded, .journal-orbit { animation: none; }
+      .journal-card-content { transition: none; }
+    }
+  </style>
+
+  <g id="journal-page" aria-label="Dream journal, opening saved dreams">
+    <rect width="390" height="520" fill="url(#journal-night)" />
+    <circle cx="336" cy="58" r="86" fill="#f8dba8" opacity="0.045" />
+    <circle cx="42" cy="468" r="112" fill="#5f93c2" opacity="0.045" />
+
+    <text x="24" y="39" fill="#9fb5cf" font-size="10" font-weight="700" letter-spacing="2.7">DREAM JOURNAL</text>
+    <rect x="300" y="21" width="66" height="27" rx="13.5" fill="#ffffff" opacity="0.08" />
+    <text id="journal-count" x="333" y="39" fill="#f8dba8" font-size="9" font-weight="700" text-anchor="middle">OPENING</text>
+    <text x="24" y="73" fill="#f7f1e7" font-size="25" font-weight="700">Memories held.</text>
+    <text x="24" y="94" fill="#9fb5cf" font-size="11">A separate .svge page, sharing one private journal.</text>
+
+    <g transform="translate(20 118)">
+      <g id="journal-card-0" class="journal-card-content">
+        <rect width="350" height="104" rx="20" fill="url(#journal-card-fill)" stroke="#dbeaff" stroke-opacity="0.16" />
+        <g class="journal-orbit">
+          <circle cx="37" cy="38" r="18" fill="#f8dba8" opacity="0.12" />
+          <path d="M27 40 C31 29, 43 25, 49 33 C43 31, 37 36, 37 44 C33 44, 29 43, 27 40 Z" fill="#fff4d6" />
+        </g>
+        <text id="journal-card-0-title" x="68" y="31" fill="#f5dfbb" font-size="14" font-weight="700">Waiting for a dream…</text>
+        <text id="journal-card-0-body" x="68" y="53" fill="#d8e4f1" font-size="11">A memory will settle here.</text>
+        <text id="journal-card-0-meta" x="68" y="76" fill="#819ab7" font-size="9" font-weight="700">JOURNAL SLOT</text>
+        <path d="M68 87 H324" stroke="#dbeaff" stroke-width="1" opacity="0.09" />
+      </g>
+    </g>
+
+    <g transform="translate(20 232)">
+      <g id="journal-card-1" class="journal-card-content">
+        <rect width="350" height="104" rx="20" fill="url(#journal-card-fill)" stroke="#dbeaff" stroke-opacity="0.16" />
+        <g class="journal-orbit">
+          <circle cx="37" cy="38" r="18" fill="#f8dba8" opacity="0.12" />
+          <path d="M27 40 C31 29, 43 25, 49 33 C43 31, 37 36, 37 44 C33 44, 29 43, 27 40 Z" fill="#fff4d6" />
+        </g>
+        <text id="journal-card-1-title" x="68" y="31" fill="#f5dfbb" font-size="14" font-weight="700">Waiting for a dream…</text>
+        <text id="journal-card-1-body" x="68" y="53" fill="#d8e4f1" font-size="11">A memory will settle here.</text>
+        <text id="journal-card-1-meta" x="68" y="76" fill="#819ab7" font-size="9" font-weight="700">JOURNAL SLOT</text>
+        <path d="M68 87 H324" stroke="#dbeaff" stroke-width="1" opacity="0.09" />
+      </g>
+    </g>
+
+    <g transform="translate(20 346)">
+      <g id="journal-card-2" class="journal-card-content">
+        <rect width="350" height="104" rx="20" fill="url(#journal-card-fill)" stroke="#dbeaff" stroke-opacity="0.16" />
+        <g class="journal-orbit">
+          <circle cx="37" cy="38" r="18" fill="#f8dba8" opacity="0.12" />
+          <path d="M27 40 C31 29, 43 25, 49 33 C43 31, 37 36, 37 44 C33 44, 29 43, 27 40 Z" fill="#fff4d6" />
+        </g>
+        <text id="journal-card-2-title" x="68" y="31" fill="#f5dfbb" font-size="14" font-weight="700">Waiting for a dream…</text>
+        <text id="journal-card-2-body" x="68" y="53" fill="#d8e4f1" font-size="11">A memory will settle here.</text>
+        <text id="journal-card-2-meta" x="68" y="76" fill="#819ab7" font-size="9" font-weight="700">JOURNAL SLOT</text>
+        <path d="M68 87 H324" stroke="#dbeaff" stroke-width="1" opacity="0.09" />
+      </g>
+    </g>
+
+    <text id="journal-status" x="195" y="482" fill="#7893b2" font-size="10" font-weight="700" text-anchor="middle">Reading the shared database…</text>
+    <path d="M93 499 H297" stroke="#efaa65" stroke-width="1" opacity="0.25" />
+  </g>
+
+  <script type="application/ecmascript"><![CDATA[
+    (() => {
+      const compact = (value, limit) => {
+        const text = String(value || '').replace(/\s+/gu, ' ').trim();
+        if (text === '') return 'No words were recorded.';
+        return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
+      };
+
+      window.addEventListener('sausage-ready', async () => {
+        const page = document.getElementById('journal-page');
+        const status = document.getElementById('journal-status');
+        try {
+          const [entries, countRows] = await Promise.all([
+            window.sausage.db.query(
+              `SELECT id, body, vividness, lucid, intensity
+                 FROM dream_entries
+                WHERE id > ?
+                ORDER BY id DESC
+                LIMIT 3`,
+              [0]
+            ),
+            window.sausage.db.query(
+              'SELECT COUNT(*) AS count FROM dream_entries WHERE id > ?',
+              [0]
+            )
+          ]);
+          if (countRows.length !== 1 || !Number.isSafeInteger(countRows[0].count)) {
+            throw new Error('Dream journal returned an invalid entry count.');
+          }
+
+          const count = countRows[0].count;
+          document.getElementById('journal-count').textContent = `${count} HELD`;
+          status.textContent = count === 1
+            ? 'The latest memory from this application database'
+            : `The latest ${Math.min(count, 3)} of ${count} memories`;
+          page.setAttribute(
+            'aria-label',
+            count === 1 ? 'Dream journal with 1 saved dream' : `Dream journal with ${count} saved dreams`
+          );
+
+          entries.forEach((entry, index) => {
+            const card = document.getElementById(`journal-card-${index}`);
+            const vividness = entry.vividness == null ? 'Vividness open' : entry.vividness;
+            const lucidity = entry.lucid === 1 ? 'Lucid' : 'Not lucid';
+            document.getElementById(`journal-card-${index}-title`).textContent = `Dream #${entry.id}`;
+            document.getElementById(`journal-card-${index}-body`).textContent = compact(entry.body, 43);
+            document.getElementById(`journal-card-${index}-meta`).textContent =
+              `${vividness.toUpperCase()} · ${lucidity.toUpperCase()} · INTENSITY ${entry.intensity}`;
+            card.classList.add('loaded');
+          });
+        } catch (error) {
+          document.getElementById('journal-count').textContent = 'UNAVAILABLE';
+          status.textContent = 'This journal could not be opened';
+          page.setAttribute('aria-label', 'Dream journal unavailable');
+          console.error('Could not read the graphical dream journal', error);
+        }
+      }, { once: true });
+
+      window.returnToDreamNote = () => window.sausage.navigation.back();
+    })();
+  ]]></script>
+</svg>

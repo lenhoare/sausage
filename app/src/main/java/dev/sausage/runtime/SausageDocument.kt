@@ -18,6 +18,8 @@ import kotlin.math.round
 
 internal data class SausageDocument(
     val displayName: String,
+    val applicationId: String?,
+    val bundledAssetPath: String?,
     val storageScope: String,
     val flow: SausageFlow?,
     val content: ByteArray,
@@ -82,7 +84,7 @@ internal object SausageDocumentReader {
         assetName: String,
     ): SausageDocument = try {
         assets.open(assetName).use { input ->
-            createDocument(assetName, input)
+            createDocument(assetName, input, bundledAssetPath = assetName)
         }
     } catch (error: SausageDocumentException) {
         throw error
@@ -102,7 +104,7 @@ internal object SausageDocumentReader {
         } ?: throw SausageDocumentException("Android could not open $displayName.")
 
         return try {
-            input.use { createDocument(displayName, it) }
+            input.use { createDocument(displayName, it, bundledAssetPath = null) }
         } catch (error: SausageDocumentException) {
             throw error
         } catch (error: Exception) {
@@ -113,6 +115,7 @@ internal object SausageDocumentReader {
     private fun createDocument(
         displayName: String,
         input: InputStream,
+        bundledAssetPath: String?,
     ): SausageDocument {
         val bytes = input.readWithLimit(MAX_DOCUMENT_BYTES)
         if (bytes.isEmpty()) {
@@ -124,10 +127,57 @@ internal object SausageDocumentReader {
 
         return SausageDocument(
             displayName = displayName,
+            applicationId = inspection.manifestId,
+            bundledAssetPath = bundledAssetPath,
             storageScope = inspection.manifestId ?: "document:${source.sha256()}",
             flow = inspection.flow,
             content = source.toByteArray(StandardCharsets.UTF_8),
         )
+    }
+
+    fun fromBundledRelative(
+        assets: AssetManager,
+        currentDocument: SausageDocument,
+        relativePath: String,
+    ): SausageDocument {
+        val currentPath = currentDocument.bundledAssetPath
+            ?: throw SausageDocumentException(
+                "Relative document navigation is currently available only inside bundled Sausage applications.",
+            )
+        val targetPath = resolveBundledSibling(currentPath, relativePath)
+        return fromAsset(assets, targetPath)
+    }
+
+    private fun resolveBundledSibling(
+        currentPath: String,
+        relativePath: String,
+    ): String {
+        if (relativePath.isBlank() || relativePath != relativePath.trim()) {
+            throw SausageDocumentException("A linked Sausage document must use a non-empty relative path.")
+        }
+        if (relativePath.toByteArray(StandardCharsets.UTF_8).size > MAX_LINK_PATH_BYTES) {
+            throw SausageDocumentException("A linked Sausage document path is too long.")
+        }
+        if (
+            relativePath.startsWith('/') ||
+            '\\' in relativePath ||
+            ':' in relativePath ||
+            '?' in relativePath ||
+            '#' in relativePath
+        ) {
+            throw SausageDocumentException("A linked Sausage document must use a safe relative path.")
+        }
+
+        val targetSegments = relativePath.split('/')
+        if (targetSegments.any { it.isEmpty() || it == "." || it == ".." }) {
+            throw SausageDocumentException("A linked Sausage document path may not escape its application root.")
+        }
+        if (!targetSegments.last().endsWith(".svge", ignoreCase = true)) {
+            throw SausageDocumentException("A linked application document must use the .svge extension.")
+        }
+
+        val directory = currentPath.substringBeforeLast('/', missingDelimiterValue = "")
+        return if (directory.isEmpty()) relativePath else "$directory/$relativePath"
     }
 
     private fun decodeUtf8(
@@ -467,6 +517,7 @@ internal object SausageDocumentReader {
     }
 
     private const val MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
+    private const val MAX_LINK_PATH_BYTES = 256
     private const val SVG_ROOT = "svg"
     private const val SVG_NAMESPACE = "http://www.w3.org/2000/svg"
     private const val APP_NAMESPACE = "https://sausage.dev/ns/app/1"

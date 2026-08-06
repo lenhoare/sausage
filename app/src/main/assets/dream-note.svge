@@ -38,6 +38,7 @@
     </app:screen>
     <app:screen id="review">
       <app:graphic ref="dream-review" />
+      <app:button label="Open dream journal" action="openDreamJournal" />
       <app:button label="Return to note" target-screen="note" />
     </app:screen>
   </metadata>
@@ -444,6 +445,9 @@
           }, reducedMotion ? 0 : 260);
         });
       };
+
+      window.openDreamJournal = () =>
+        window.sausage.navigation.open('dream-journal.svge');
     })();
   ]]></script>
 </svg>
