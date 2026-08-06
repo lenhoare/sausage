@@ -205,13 +205,19 @@ The exact flow vocabulary remains open. The following example illustrates the in
       <app:choice key="clarity"
                   label="How vivid was it?"
                   options="Faint,Clear,Extremely vivid" />
-      <app:button action="saveDream">Save entry</app:button>
+      <app:button label="Save entry" action="saveDream" />
+      <app:graphic ref="saved-art" />
     </app:screen>
   </metadata>
 
   <g id="journal-art">
     <!-- Rich SVG artwork and animation -->
     <text x="24" y="64">Last night's dream</text>
+  </g>
+
+  <g id="saved-art">
+    <!-- A second graphical slice displayed after the controls -->
+    <text x="24" y="64">Dream saved</text>
   </g>
 
   <script type="application/ecmascript"><![CDATA[
@@ -488,7 +494,8 @@ A v1 application MAY contain multiple declarative screens. A screen may be a ful
   <app:screen id="journal">
     <app:graphic ref="journal-art" />
     <app:text-area key="dream" label="What do you remember?" />
-    <app:button action="saveDream">Save entry</app:button>
+    <app:button label="Save entry" action="saveDream" />
+    <app:graphic ref="saved-art" />
   </app:screen>
 </metadata>
 ```

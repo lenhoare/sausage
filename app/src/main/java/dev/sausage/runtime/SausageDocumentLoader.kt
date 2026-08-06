@@ -40,20 +40,7 @@ internal class SausageDocumentLoader(
         val sourceSvg = document.content
             .toString(StandardCharsets.UTF_8)
             .replaceFirst(XML_DECLARATION, "")
-        val control = flow.textArea
-        val hint = control.hint?.let {
-            "<p class=\"sausage-hint\">${it.escapeHtml()}</p>"
-        }.orEmpty()
-        val button = flow.button
-        val buttonHtml = button?.let {
-            """
-                <button id="sausage-action-button"
-                        class="sausage-action-button"
-                        type="button"
-                        data-action="${it.action.escapeHtml()}">${it.label.escapeHtml()}</button>
-                <p id="sausage-action-status" class="sausage-action-status" aria-live="polite">Ready</p>
-            """.trimIndent()
-        }.orEmpty()
+        val sliceHtml = renderSlices(flow)
         val html = """
             <!doctype html>
             <html lang="en">
@@ -73,6 +60,17 @@ internal class SausageDocumentLoader(
                   body {
                     color: #f8fafc;
                     overscroll-behavior-y: none;
+                  }
+                  .sausage-svg-source {
+                    position: absolute;
+                    width: 0;
+                    height: 0;
+                    overflow: hidden;
+                    pointer-events: none;
+                  }
+                  .sausage-svg-source > svg {
+                    width: 0 !important;
+                    height: 0 !important;
                   }
                   .sausage-graphic {
                     width: 100%;
@@ -97,6 +95,7 @@ internal class SausageDocumentLoader(
                     background: linear-gradient(155deg, #10243b, #0b1b2e);
                     box-shadow: 0 22px 55px rgba(0, 0, 0, .28);
                   }
+                  .sausage-control + .sausage-control { margin-top: 22px; }
                   label {
                     display: block;
                     margin-bottom: 9px;
@@ -111,7 +110,7 @@ internal class SausageDocumentLoader(
                     font-size: 13px;
                     line-height: 1.45;
                   }
-                  textarea {
+                  .sausage-text-area {
                     display: block;
                     width: 100%;
                     min-height: 156px;
@@ -126,8 +125,8 @@ internal class SausageDocumentLoader(
                     font: 400 16px/1.5 Inter, Roboto, Arial, sans-serif;
                     box-shadow: inset 0 0 0 1px rgba(23, 43, 61, .12);
                   }
-                  textarea::placeholder { color: #7c8994; opacity: 1; }
-                  textarea:focus {
+                  .sausage-text-area::placeholder { color: #7c8994; opacity: 1; }
+                  .sausage-text-area:focus {
                     border-color: #efaa65;
                     box-shadow: 0 0 0 4px rgba(239, 170, 101, .17);
                   }
@@ -143,7 +142,6 @@ internal class SausageDocumentLoader(
                     display: block;
                     width: 100%;
                     min-height: 58px;
-                    margin-top: 22px;
                     padding: 13px 20px;
                     border: 0;
                     border-radius: 18px;
@@ -177,52 +175,66 @@ internal class SausageDocumentLoader(
                 </style>
               </head>
               <body>
-                <section class="sausage-graphic" aria-label="Graphical introduction">
+                <div id="sausage-svg-source" class="sausage-svg-source" aria-hidden="true">
                   $sourceSvg
-                </section>
-                <section class="sausage-controls">
-                  <div class="sausage-control-card">
-                    <label for="sausage-text-area">${control.label.escapeHtml()}</label>
-                    $hint
-                    <textarea id="sausage-text-area"
-                              data-storage-key="${control.key.escapeHtml()}"
-                              placeholder="${control.placeholder.orEmpty().escapeHtml()}"
-                              spellcheck="true"></textarea>
-                    <p id="sausage-save-status" class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
-                    $buttonHtml
-                  </div>
-                </section>
+                </div>
+                <main id="sausage-flow">$sliceHtml</main>
                 <script>
-                  window.addEventListener('sausage-ready', async () => {
-                    const input = document.getElementById('sausage-text-area');
-                    const status = document.getElementById('sausage-save-status');
-                    const key = input.dataset.storageKey;
-                    let saveTimer;
+                  (() => {
+                    const svgNamespace = 'http://www.w3.org/2000/svg';
+                    const source = document.querySelector('#sausage-svg-source > svg');
+                    if (!source) return;
 
-                    try {
-                      const saved = await window.sausage.storage.get(key);
-                      if (typeof saved === 'string') input.value = saved;
-                    } catch (error) {
-                      status.textContent = 'Could not restore this note';
-                      console.error('Could not restore Dream Note', error);
-                    }
+                    const viewBox = source.getAttribute('viewBox');
+                    const preserveAspectRatio = source.getAttribute('preserveAspectRatio');
 
-                    const save = async () => {
-                      try {
-                        await window.sausage.storage.set(key, input.value);
-                        status.textContent = 'Saved on this device';
-                      } catch (error) {
-                        status.textContent = 'Could not save this note';
-                        console.error('Could not save Dream Note', error);
-                      }
-                    };
+                    document.querySelectorAll('.sausage-graphic[data-graphic-ref]').forEach((slice) => {
+                      const graphic = document.getElementById(slice.dataset.graphicRef);
+                      if (!graphic || graphic.namespaceURI !== svgNamespace) return;
 
-                    input.addEventListener('input', () => {
-                      status.textContent = 'Saving…';
-                      clearTimeout(saveTimer);
-                      saveTimer = setTimeout(save, 180);
+                      const svg = document.createElementNS(svgNamespace, 'svg');
+                      if (viewBox) svg.setAttribute('viewBox', viewBox);
+                      if (preserveAspectRatio) svg.setAttribute('preserveAspectRatio', preserveAspectRatio);
+                      svg.setAttribute('width', '100%');
+                      svg.setAttribute('aria-hidden', 'false');
+                      svg.appendChild(graphic);
+                      slice.appendChild(svg);
                     });
-                    input.addEventListener('change', save);
+                  })();
+
+                  window.addEventListener('sausage-ready', async () => {
+                    const inputs = document.querySelectorAll('.sausage-text-area');
+                    for (const input of inputs) {
+                      const control = input.closest('.sausage-control');
+                      const status = control.querySelector('.sausage-save-status');
+                      const key = input.dataset.storageKey;
+                      let saveTimer;
+
+                      try {
+                        const saved = await window.sausage.storage.get(key);
+                        if (typeof saved === 'string') input.value = saved;
+                      } catch (error) {
+                        status.textContent = 'Could not restore this text';
+                        console.error('Could not restore Sausage text area', error);
+                      }
+
+                      const save = async () => {
+                        try {
+                          await window.sausage.storage.set(key, input.value);
+                          status.textContent = 'Saved on this device';
+                        } catch (error) {
+                          status.textContent = 'Could not save this text';
+                          console.error('Could not save Sausage text area', error);
+                        }
+                      };
+
+                      input.addEventListener('input', () => {
+                        status.textContent = 'Saving…';
+                        clearTimeout(saveTimer);
+                        saveTimer = setTimeout(save, 180);
+                      });
+                      input.addEventListener('change', save);
+                    }
 
                     const updateForKeyboard = () => {
                       const viewport = window.visualViewport;
@@ -237,7 +249,8 @@ internal class SausageDocumentLoader(
                         `${'$'}{keyboardInset}px`
                       );
 
-                      if (document.activeElement !== input) return;
+                      const input = document.activeElement;
+                      if (!input || !input.classList.contains('sausage-text-area')) return;
 
                       requestAnimationFrame(() => {
                         const activeViewport = window.visualViewport;
@@ -261,21 +274,25 @@ internal class SausageDocumentLoader(
                       });
                     };
 
-                    input.addEventListener('focus', () => {
-                      setTimeout(updateForKeyboard, 80);
-                      setTimeout(updateForKeyboard, 320);
+                    inputs.forEach((input) => {
+                      input.addEventListener('focus', () => {
+                        setTimeout(updateForKeyboard, 80);
+                        setTimeout(updateForKeyboard, 320);
+                      });
+                      input.addEventListener('blur', updateForKeyboard);
                     });
-                    input.addEventListener('blur', updateForKeyboard);
                     window.addEventListener('resize', updateForKeyboard);
                     if (window.visualViewport) {
                       window.visualViewport.addEventListener('resize', updateForKeyboard);
                     }
 
-                    const actionButton = document.getElementById('sausage-action-button');
-                    const actionStatus = document.getElementById('sausage-action-status');
-                    if (actionButton) {
+                    document.querySelectorAll('.sausage-action-button').forEach((actionButton) => {
+                      const control = actionButton.closest('.sausage-control');
+                      const actionStatus = control.querySelector('.sausage-action-status');
                       actionButton.addEventListener('click', async () => {
-                        input.blur();
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
+                        }
                         actionButton.classList.remove('completed');
                         actionButton.setAttribute('aria-busy', 'true');
                         actionStatus.textContent = 'Running…';
@@ -295,7 +312,7 @@ internal class SausageDocumentLoader(
                           actionButton.removeAttribute('aria-busy');
                         }
                       });
-                    }
+                    });
                   }, { once: true });
                 </script>
               </body>
@@ -306,6 +323,74 @@ internal class SausageDocumentLoader(
             mimeType = HTML_MIME_TYPE,
             content = html.toByteArray(StandardCharsets.UTF_8),
         )
+    }
+
+    private fun renderSlices(flow: SausageFlow): String {
+        val html = StringBuilder()
+        val pendingControls = mutableListOf<Pair<Int, SausageSlice>>()
+
+        fun flushControls() {
+            if (pendingControls.isEmpty()) return
+            html.append("<section class=\"sausage-controls\"><div class=\"sausage-control-card\">")
+            pendingControls.forEach { (index, control) ->
+                html.append(renderControl(control, index))
+            }
+            html.append("</div></section>")
+            pendingControls.clear()
+        }
+
+        flow.slices.forEachIndexed { index, slice ->
+            when (slice) {
+                is SausageGraphic -> {
+                    flushControls()
+                    html.append(
+                        "<section class=\"sausage-graphic\" data-graphic-ref=\"${slice.ref.escapeHtml()}\"></section>",
+                    )
+                }
+
+                is SausageTextArea,
+                is SausageButton,
+                -> pendingControls += index to slice
+            }
+        }
+        flushControls()
+        return html.toString()
+    }
+
+    private fun renderControl(
+        control: SausageSlice,
+        index: Int,
+    ): String = when (control) {
+        is SausageTextArea -> {
+            val id = "sausage-text-area-$index"
+            val hint = control.hint?.let {
+                "<p class=\"sausage-hint\">${it.escapeHtml()}</p>"
+            }.orEmpty()
+            """
+                <div class="sausage-control sausage-text-area-control">
+                  <label for="$id">${control.label.escapeHtml()}</label>
+                  $hint
+                  <textarea id="$id"
+                            class="sausage-text-area"
+                            data-storage-key="${control.key.escapeHtml()}"
+                            placeholder="${control.placeholder.orEmpty().escapeHtml()}"
+                            spellcheck="true"></textarea>
+                  <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
+                </div>
+            """.trimIndent()
+        }
+
+        is SausageButton -> """
+            <div class="sausage-control sausage-button-control">
+              <button id="sausage-action-button-$index"
+                      class="sausage-action-button"
+                      type="button"
+                      data-action="${control.action.escapeHtml()}">${control.label.escapeHtml()}</button>
+              <p class="sausage-action-status" aria-live="polite">Ready</p>
+            </div>
+        """.trimIndent()
+
+        is SausageGraphic -> error("A graphical slice cannot be rendered as a control.")
     }
 
     private fun String.escapeHtml(): String = this

@@ -19,6 +19,7 @@
           hint="A real browser text field—selection, clipboard and keyboard included."
           placeholder="A place, a feeling, a strange detail..." />
       <app:button label="Hold this dream" action="captureDream" />
+      <app:graphic ref="dream-confirmation" />
     </app:screen>
   </metadata>
 
@@ -60,6 +61,23 @@
     #dream-header.captured #orbit {
       animation: capture-orbit 900ms cubic-bezier(.2, .85, .24, 1);
     }
+    #dream-confirmation .confirmation-ready,
+    #dream-confirmation .confirmation-held,
+    #dream-confirmation .confirmation-rings {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    #dream-confirmation .confirmation-held { opacity: 0; }
+    #dream-confirmation .confirmation-rings { opacity: 0.2; }
+    #dream-confirmation.confirmed .confirmation-ready {
+      animation: confirmation-out 500ms ease forwards;
+    }
+    #dream-confirmation.confirmed .confirmation-held {
+      animation: confirmation-in 700ms 180ms cubic-bezier(.2, .85, .24, 1) forwards;
+    }
+    #dream-confirmation.confirmed .confirmation-rings {
+      animation: confirmation-rings 950ms cubic-bezier(.2, .85, .24, 1);
+    }
     @keyframes twinkle {
       0%, 100% { opacity: .22; }
       50% { opacity: .9; }
@@ -80,8 +98,23 @@
       68% { transform: scale(1.09); }
       100% { transform: scale(1); }
     }
+    @keyframes confirmation-out {
+      to { opacity: 0; transform: translateY(-7px); }
+    }
+    @keyframes confirmation-in {
+      0% { opacity: 0; transform: translateY(12px) scale(.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes confirmation-rings {
+      0% { opacity: .2; transform: scale(.78); }
+      42% { opacity: .82; }
+      100% { opacity: .2; transform: scale(1.18); }
+    }
     @media (prefers-reduced-motion: reduce) {
-      .star-a, .star-b, #orbit, #capture-burst { animation: none; }
+      .star-a, .star-b, #orbit, #capture-burst,
+      .confirmation-ready, .confirmation-held, .confirmation-rings { animation: none !important; }
+      #dream-confirmation.confirmed .confirmation-ready { opacity: 0; }
+      #dream-confirmation.confirmed .confirmation-held { opacity: 1; }
     }
   </style>
 
@@ -126,10 +159,37 @@
           fill="none" stroke="#efaa65" stroke-width="1.5" opacity="0.32" />
   </g>
 
+  <g id="dream-confirmation" aria-label="Dream note confirmation, ready when you are">
+    <rect width="390" height="340" fill="#07101e" />
+    <circle cx="195" cy="151" r="82" fill="url(#dream-glow)" opacity="0.34" filter="url(#blur)" />
+
+    <g class="confirmation-rings" fill="none" stroke-linecap="round">
+      <circle cx="195" cy="151" r="62" stroke="#efaa65" stroke-width="1.5" />
+      <circle cx="195" cy="151" r="74" stroke="#dbeaff" stroke-width="1" stroke-dasharray="2 8" />
+    </g>
+
+    <path d="M165 151 C176 166, 184 173, 195 179 C206 173, 214 166, 225 151
+             C225 127, 213 116, 195 116 C177 116, 165 127, 165 151 Z"
+          fill="#f6d89f" opacity="0.13" />
+    <path d="M176 144 C183 149, 189 155, 195 164 C201 155, 207 149, 214 144"
+          fill="none" stroke="#f8dba8" stroke-width="3" stroke-linecap="round" />
+    <circle cx="195" cy="133" r="6" fill="#fff4d6" />
+
+    <g class="confirmation-ready">
+      <text x="195" y="245" fill="#f7f1e7" font-size="25" font-weight="700" text-anchor="middle">Ready when you are.</text>
+      <text x="195" y="274" fill="#9fb5cf" font-size="12" text-anchor="middle">A quiet place is waiting for this memory.</text>
+    </g>
+    <g class="confirmation-held">
+      <text x="195" y="245" fill="#f7f1e7" font-size="25" font-weight="700" text-anchor="middle">Dream held safely.</text>
+      <text x="195" y="274" fill="#9fb5cf" font-size="12" text-anchor="middle">You can return whenever another detail surfaces.</text>
+    </g>
+  </g>
+
   <script type="application/ecmascript"><![CDATA[
     (() => {
       window.captureDream = () => {
         const header = document.getElementById('dream-header');
+        const confirmation = document.getElementById('dream-confirmation');
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         header.scrollIntoView({
@@ -144,7 +204,18 @@
             header.classList.add('captured');
             window.setTimeout(() => {
               header.classList.remove('captured');
-              resolve('Dream held safely');
+              confirmation.classList.remove('confirmed');
+              void confirmation.getBoundingClientRect();
+              confirmation.classList.add('confirmed');
+              confirmation.setAttribute('aria-label', 'Dream held safely');
+              confirmation.scrollIntoView({
+                behavior: reducedMotion ? 'auto' : 'smooth',
+                block: 'start'
+              });
+              window.setTimeout(
+                () => resolve('Dream held safely'),
+                reducedMotion ? 0 : 700
+              );
             }, reducedMotion ? 0 : 900);
           }, reducedMotion ? 0 : 260);
         });

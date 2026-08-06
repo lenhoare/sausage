@@ -14,6 +14,8 @@ The fourth slice introduces the first document-flow control. [`dream-note.svge`]
 
 The fifth slice adds one declarative `app:button`. Sausage renders a standard accessible browser button, validates its named action and invokes the matching document function. Dream Note's “Hold this dream” action scrolls back to its SVG slice and runs a repeatable SVG capture animation.
 
+The sixth slice replaces the fixed flow shape with an ordered slice model. A screen can declare multiple `app:graphic`, `app:text-area` and `app:button` slices in any useful sequence; consecutive controls share a polished control card while graphical slices remain independent SVG regions. Dream Note now ends with a second animated confirmation graphic after its controls.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

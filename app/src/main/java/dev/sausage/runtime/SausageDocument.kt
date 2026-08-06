@@ -22,22 +22,26 @@ internal data class SausageDocument(
 )
 
 internal data class SausageFlow(
-    val graphicRef: String,
-    val textArea: SausageTextArea,
-    val button: SausageButton?,
+    val slices: List<SausageSlice>,
 )
+
+internal sealed interface SausageSlice
+
+internal data class SausageGraphic(
+    val ref: String,
+) : SausageSlice
 
 internal data class SausageTextArea(
     val key: String,
     val label: String,
     val hint: String?,
     val placeholder: String?,
-)
+) : SausageSlice
 
 internal data class SausageButton(
     val label: String,
     val action: String,
-)
+) : SausageSlice
 
 internal class SausageDocumentException(
     message: String,
@@ -143,9 +147,9 @@ internal object SausageDocumentReader {
             var manifestId: String? = null
             var flowScreenDepth: Int? = null
             var flowScreenCount = 0
-            var graphicRef: String? = null
-            var textArea: SausageTextArea? = null
-            var button: SausageButton? = null
+            val flowSlices = mutableListOf<SausageSlice>()
+            val controlKeys = mutableSetOf<String>()
+            val graphicRefs = mutableSetOf<String>()
             val svgIds = mutableSetOf<String>()
 
             while (event != XmlPullParser.END_DOCUMENT) {
@@ -175,22 +179,26 @@ internal object SausageDocumentReader {
                                 flowScreenDepth = parser.depth
                             }
 
-                            GRAPHIC_ELEMENT -> if (flowScreenDepth != null) {
-                                graphicRef = parser.requiredAttribute(
+                            GRAPHIC_ELEMENT -> if (parser.isDirectChildOf(flowScreenDepth)) {
+                                val graphicRef = parser.requiredAttribute(
                                     FLOW_GRAPHIC_REF_ATTRIBUTE,
                                     displayName,
                                 )
+                                if (!graphicRefs.add(graphicRef)) {
+                                    throw SausageDocumentException("$displayName uses the SVG graphic $graphicRef more than once in one flow.")
+                                }
+                                flowSlices += SausageGraphic(graphicRef)
                             }
 
-                            TEXT_AREA_ELEMENT -> if (flowScreenDepth != null) {
-                                if (textArea != null) {
-                                    throw SausageDocumentException("$displayName uses more than one text area, which this slice does not support yet.")
-                                }
+                            TEXT_AREA_ELEMENT -> if (parser.isDirectChildOf(flowScreenDepth)) {
                                 val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
                                 if (!CONTROL_KEY.matches(key)) {
                                     throw SausageDocumentException("$displayName has an invalid text-area storage key.")
                                 }
-                                textArea = SausageTextArea(
+                                if (!controlKeys.add(key)) {
+                                    throw SausageDocumentException("$displayName uses the control key $key more than once.")
+                                }
+                                flowSlices += SausageTextArea(
                                     key = key,
                                     label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
                                     hint = parser.getAttributeValue(null, CONTROL_HINT_ATTRIBUTE),
@@ -198,10 +206,7 @@ internal object SausageDocumentReader {
                                 )
                             }
 
-                            BUTTON_ELEMENT -> if (flowScreenDepth != null) {
-                                if (button != null) {
-                                    throw SausageDocumentException("$displayName uses more than one button, which this slice does not support yet.")
-                                }
+                            BUTTON_ELEMENT -> if (parser.isDirectChildOf(flowScreenDepth)) {
                                 val action = parser.requiredAttribute(
                                     BUTTON_ACTION_ATTRIBUTE,
                                     displayName,
@@ -209,7 +214,7 @@ internal object SausageDocumentReader {
                                 if (!ACTION_NAME.matches(action)) {
                                     throw SausageDocumentException("$displayName has an invalid button action name.")
                                 }
-                                button = SausageButton(
+                                flowSlices += SausageButton(
                                     label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
                                     action = action,
                                 )
@@ -226,17 +231,20 @@ internal object SausageDocumentReader {
                 event = parser.next()
             }
 
-            val flow = if (textArea != null) {
-                val resolvedGraphicRef = graphicRef
-                    ?: throw SausageDocumentException("$displayName has a flow control but no graphical slice.")
-                if (resolvedGraphicRef !in svgIds) {
-                    throw SausageDocumentException("$displayName refers to a missing SVG graphic: $resolvedGraphicRef.")
+            val flow = if (flowScreenCount == 1) {
+                if (flowSlices.isEmpty()) {
+                    throw SausageDocumentException("$displayName has an empty flow screen.")
                 }
-                SausageFlow(resolvedGraphicRef, textArea, button)
+                if (flowSlices.none { it is SausageGraphic }) {
+                    throw SausageDocumentException("$displayName has a flow screen without a graphical slice.")
+                }
+                flowSlices.filterIsInstance<SausageGraphic>().forEach { graphic ->
+                    if (graphic.ref !in svgIds) {
+                        throw SausageDocumentException("$displayName refers to a missing SVG graphic: ${graphic.ref}.")
+                    }
+                }
+                SausageFlow(flowSlices.toList())
             } else {
-                if (button != null) {
-                    throw SausageDocumentException("$displayName uses a button without the text-area flow required by this slice.")
-                }
                 null
             }
 
@@ -289,6 +297,9 @@ internal object SausageDocumentReader {
         displayName: String,
     ): String = getAttributeValue(null, name)?.takeIf(String::isNotBlank)
         ?: throw SausageDocumentException("$displayName is missing the required $name attribute.")
+
+    private fun XmlPullParser.isDirectChildOf(parentDepth: Int?): Boolean =
+        parentDepth != null && depth == parentDepth + 1
 
     private fun String.sha256(): String = MessageDigest
         .getInstance("SHA-256")
