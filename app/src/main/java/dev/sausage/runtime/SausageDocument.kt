@@ -12,9 +12,11 @@ import java.io.StringReader
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 internal data class SausageDocument(
     val displayName: String,
+    val storageScope: String,
     val content: ByteArray,
 )
 
@@ -67,10 +69,11 @@ internal object SausageDocumentReader {
         }
 
         val source = decodeUtf8(bytes, displayName)
-        validateSvg(source, displayName)
+        val manifestId = validateSvg(source, displayName)
 
         return SausageDocument(
             displayName = displayName,
+            storageScope = manifestId ?: "document:${source.sha256()}",
             content = source.toByteArray(StandardCharsets.UTF_8),
         )
     }
@@ -93,12 +96,12 @@ internal object SausageDocumentReader {
     private fun validateSvg(
         source: String,
         displayName: String,
-    ) {
+    ): String? {
         if (source.contains("<!DOCTYPE", ignoreCase = true)) {
             throw SausageDocumentException("$displayName contains a document type declaration, which is not supported.")
         }
 
-        try {
+        return try {
             val parser = Xml.newPullParser().apply {
                 setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true)
                 setInput(StringReader(source))
@@ -117,9 +120,25 @@ internal object SausageDocumentReader {
                 throw SausageDocumentException("$displayName is not an SVG document.")
             }
 
+            var manifestId: String? = null
             while (event != XmlPullParser.END_DOCUMENT) {
+                if (
+                    event == XmlPullParser.START_TAG &&
+                    parser.namespace == APP_NAMESPACE &&
+                    parser.name == MANIFEST_ELEMENT
+                ) {
+                    val candidate = parser.getAttributeValue(null, MANIFEST_ID_ATTRIBUTE)
+                    if (candidate.isNullOrBlank() || !APPLICATION_ID.matches(candidate)) {
+                        throw SausageDocumentException("$displayName has an invalid Sausage application ID.")
+                    }
+                    if (manifestId != null && manifestId != candidate) {
+                        throw SausageDocumentException("$displayName declares more than one Sausage application ID.")
+                    }
+                    manifestId = candidate
+                }
                 event = parser.next()
             }
+            manifestId
         } catch (error: SausageDocumentException) {
             throw error
         } catch (error: Exception) {
@@ -163,8 +182,16 @@ internal object SausageDocumentReader {
         return output.toByteArray()
     }
 
+    private fun String.sha256(): String = MessageDigest
+        .getInstance("SHA-256")
+        .digest(toByteArray(StandardCharsets.UTF_8))
+        .joinToString(separator = "") { byte -> "%02x".format(byte) }
+
     private const val MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
     private const val SVG_ROOT = "svg"
     private const val SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+    private const val APP_NAMESPACE = "https://sausage.dev/ns/app/1"
+    private const val MANIFEST_ELEMENT = "manifest"
+    private const val MANIFEST_ID_ATTRIBUTE = "id"
+    private val APPLICATION_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 }
-

@@ -6,6 +6,10 @@ The first development slice loads a bundled [`first-card.svge`](app/src/main/ass
 
 The second slice adds a small runtime home screen and Android document picker. A user can select a self-contained `.svge` file, which Sausage reads through Android's URI grant, validates as UTF-8 SVG XML, and renders through the same controlled WebView path as the bundled example.
 
+The third slice adds the first narrow host API. `sausage.storage` provides promise-based `get`, `set` and `remove` operations backed by application-isolated Android storage. The bundled Journey Card remembers whether it has been revealed after leaving or restarting Sausage, and resetting the card removes that saved progress.
+
+Storage is scoped by the Sausage manifest application ID. Documents without a manifest receive a content-derived private scope for this early slice. Values must be JSON-compatible, individual values are limited to 64 KB, and the current per-application allowance is 256 KB.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

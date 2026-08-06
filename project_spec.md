@@ -1,12 +1,12 @@
 # Sausage Android Runtime — General Specification
 
 **Document:** `project_spec.md`  
-**Status:** Draft v0.1  
+**Status:** Draft v0.2
 **Target:** Android runtime/viewer  
 **File extension:** `.svge`  
 **Runtime/product name:** Sausage  
 
-> **Sausage is an SVG application runtime for polished graphical mobile experiences, extended with native controls and device capabilities where they are useful.**
+> **Sausage is an SVG application runtime for polished graphical mobile experiences, extended with a small set of standard input controls and device capabilities where they are useful.**
 
 > **Making beautiful mobile apps as easy for anyone with AI to generate and run as writing an SVG.**
 
@@ -47,17 +47,17 @@ Sausage is primarily for graphical journeys, attractive content-led applications
 
 SVG remains responsible for:
 
-- the visual coordinate system;
-- layout;
+- graphical regions and their visual coordinate systems;
 - shapes, paths, images, text and gradients;
 - transforms and animation;
 - visual styling;
 - pointer hit regions;
-- most visual buttons and custom controls.
+- bespoke graphical interactions.
 
 The application extension adds only the application facilities that SVG does not naturally provide:
 
-- editable native controls;
+- editable text and other standard form controls;
+- simple document-flow layout around graphical regions;
 - application lifecycle;
 - navigation;
 - device capabilities;
@@ -66,6 +66,12 @@ The application extension adds only the application facilities that SVG does not
 - persistence and local databases;
 - notifications;
 - access to Android system services.
+
+Sausage MUST NOT reimplement complex input behaviour in SVG. Text editing, cursor movement, selection, copy and paste, keyboard integration and accessibility SHOULD be supplied by existing browser or platform controls.
+
+A screen MAY be divided into ordered horizontal slices, similar to a simple document or Markdown flow. SVG slices provide expressive artwork and animation; standard control slices provide dependable input. Standard controls follow document order and do not use exact SVG coordinates.
+
+The intended control vocabulary is deliberately small—roughly comparable in breadth to a classic VB6 toolbox, but without VB6-style absolute placement. Authors describe the purpose, content and state binding of a control; Sausage owns its detailed layout and behaviour.
 
 ### 2.3 Primary audience — DECIDED
 
@@ -110,9 +116,10 @@ Version 1 is the eventual complete first profile, not a single development miles
 - **Host** — the native Android runtime.
 - **SVG renderer** — the component rendering normal SVG content.
 - **Application script** — JavaScript contained in or loaded by the Sausage document.
-- **Native control** — an Android control composited over the SVG surface.
+- **Graphical slice** — an SVG region rendered as an expressive part of a screen.
+- **Standard control** — a runtime-created browser or platform control placed in document flow.
+- **Control slice** — a horizontal flow region containing one or more standard controls.
 - **Capability** — a host-provided service such as camera, location or notifications.
-- **Fallback graphic** — ordinary SVG content shown by standard renderers in place of a native application control.
 
 ---
 
@@ -172,13 +179,13 @@ A minimal document:
 
 The Sausage application profile SHOULD use:
 
-- **namespaced attributes on normal SVG elements** for visual behaviour, controls, events, navigation and bindings;
-- **namespaced elements inside `<metadata>`** for non-visual declarations such as manifest data, permissions and network policy;
+- **namespaced attributes on normal SVG elements** for graphical events, navigation and bindings;
+- **namespaced elements inside `<metadata>`** for non-visual declarations such as manifest data, permissions, screen flow and standard controls;
 - ordinary SVG `<script>` elements for application JavaScript.
 
-This improves fallback rendering because normal SVG elements remain visible in standard renderers.
+This keeps the source as valid SVG and improves fallback rendering because graphical content remains visible in standard SVG renderers. Authors do not write arbitrary HTML; the runtime creates proven web controls from the small Sausage vocabulary.
 
-Example:
+The exact flow vocabulary remains open. The following example illustrates the intended authoring level rather than fixing the final XML syntax:
 
 ```xml
 <svg xmlns="http://www.w3.org/2000/svg"
@@ -186,38 +193,33 @@ Example:
      viewBox="0 0 360 800">
 
   <metadata>
-    <app:manifest
-        id="com.example.temperature"
-        name="Temperature Converter"
-        version="1.0">
-      <app:permission name="storage" />
-    </app:manifest>
+    <app:manifest id="com.example.dreams"
+                  name="Dream Journal"
+                  version="1.0" />
+
+    <app:screen id="journal">
+      <app:graphic ref="journal-art" />
+      <app:text-area key="dream"
+                     label="What do you remember?"
+                     placeholder="Write down anything that remains..." />
+      <app:choice key="clarity"
+                  label="How vivid was it?"
+                  options="Faint,Clear,Extremely vivid" />
+      <app:button action="saveDream">Save entry</app:button>
+    </app:screen>
   </metadata>
 
-  <g id="temperature"
-     app:control="text-field"
-     app:value="20"
-     app:input-type="decimal">
-    <rect x="24" y="80" width="200" height="48" rx="8"
-          fill="white" stroke="black" />
-    <text x="36" y="111">20</text>
+  <g id="journal-art">
+    <!-- Rich SVG artwork and animation -->
+    <text x="24" y="64">Last night's dream</text>
   </g>
-
-  <g id="convert"
-     role="button"
-     tabindex="0"
-     app:on-press="convertTemperature">
-    <rect x="24" y="152" width="140" height="48" rx="8" />
-    <text x="94" y="182" text-anchor="middle" fill="white">Convert</text>
-  </g>
-
-  <text id="result" x="24" y="232" />
 
   <script type="application/ecmascript"><![CDATA[
-    function convertTemperature() {
-      const c = Number(sausage.controls.getValue("temperature"));
-      document.getElementById("result").textContent =
-        `${c} °C = ${(c * 9 / 5 + 32).toFixed(1)} °F`;
+    async function saveDream() {
+      await sausage.storage.set(
+        "latestDream",
+        sausage.controls.getValue("dream")
+      );
     }
   ]]></script>
 </svg>
@@ -225,9 +227,7 @@ Example:
 
 ### 5.2 Unknown-element behaviour — PROPOSED
 
-Visual Sausage controls SHOULD NOT require standard renderers to display children of unknown namespaced elements.
-
-Non-visual namespaced elements SHOULD normally be placed inside `<metadata>`.
+Sausage flow and control declarations SHOULD normally be placed inside `<metadata>`. Standard SVG renderers may ignore them while continuing to display the graphical SVG content.
 
 ---
 
@@ -238,14 +238,14 @@ Non-visual namespaced elements SHOULD normally be placed inside `<metadata>`.
 The Android runtime SHOULD be implemented as a native Kotlin application containing:
 
 1. an SVG-capable document renderer;
-2. a native overlay layer for Android controls;
+2. a runtime-owned flow shell for standard controls and graphical slices;
 3. a restricted JavaScript-to-host bridge;
 4. capability modules for Android services;
 5. a loader, validator and permission manager.
 
-The initial implementation SHOULD use Android WebView as the SVG renderer, DOM implementation and JavaScript engine. WebView remains an implementation detail and is not exposed as a Sausage application component.
+The initial implementation SHOULD use Android WebView as the SVG renderer, DOM implementation and JavaScript engine. When standard controls are introduced, Sausage SHOULD use real HTML form controls created by a small runtime-owned HTML shell. WebView remains an implementation detail and is not exposed as a Sausage application component.
 
-The Sausage profile defines application behaviour. Applications MUST NOT rely on unrelated HTML or browser features merely because the initial runtime uses WebView.
+The Sausage profile defines application behaviour. Authors MUST NOT rely on arbitrary HTML, CSS or unrelated browser features merely because the initial runtime uses WebView.
 
 ### 6.2 Shared document model — DECIDED
 
@@ -263,10 +263,10 @@ When opening a Sausage document, the runtime:
 4. checks security policy;
 5. creates the SVG rendering surface;
 6. injects the `sausage` host API;
-7. discovers Sausage controls and event attributes;
-8. creates native control overlays;
+7. discovers screens, graphical slices, standard controls and event attributes;
+8. builds the ordered runtime flow and creates standard web controls;
 9. runs the application startup event;
-10. synchronises DOM, native control state and lifecycle events.
+10. synchronises document, control state and lifecycle events.
 
 ### 6.4 Renderer isolation — PROPOSED
 
@@ -282,120 +282,103 @@ An application MUST NOT receive arbitrary access to:
 
 ---
 
-## 7. Coordinates and native-control compositing
+## 7. Screen flow and composition
 
-### 7.1 Coordinate source — PROPOSED
+### 7.1 Ordered horizontal slices — DECIDED
 
-A native control is anchored to the rendered bounds of its associated SVG element, normally a `<g>` containing its fallback graphic.
+A Sausage screen MAY be composed as a vertical document flow containing graphical slices and control slices. Slices appear in declaration order and normally occupy the available width.
 
-The runtime calculates the anchor's final screen-space rectangle after applying:
+This model deliberately favours good user input over detailed author control of form layout. Standard controls MUST NOT require SVG coordinates, anchor rectangles, transform tracking or pixel-perfect placement.
 
-- the SVG `viewBox`;
-- viewport scaling;
-- ancestor transforms;
-- screen density;
-- orientation changes;
-- scrolling or panning performed by the runtime.
+An entirely graphical full-screen SVG remains supported for experiences that do not need standard controls.
 
-### 7.2 Version 1 transform restrictions — PROPOSED
+### 7.2 Graphical slices — PROPOSED
 
-Native controls in v1 MUST resolve to an axis-aligned screen rectangle.
+A graphical slice references an SVG element or group and supplies an intrinsic aspect ratio or preferred height. Sausage is responsible for fitting it into the available viewport without distorting it.
 
-The following are supported:
+The eventual profile needs simple conventions for:
 
-- translation;
-- uniform scale;
-- non-uniform scale;
-- normal `viewBox` scaling.
+- safe areas and screen insets;
+- maximum and preferred slice heights;
+- scrolling;
+- responsive width and aspect ratio;
+- keyboard-induced viewport changes;
+- spacing between graphical and control slices.
 
-The following are not required in v1:
+### 7.3 Control slices — DECIDED
 
-- rotation;
-- skew;
-- perspective;
-- arbitrary clipping paths;
-- masks;
-- SVG filters applied to native controls.
+Control slices are rendered by Sausage using existing browser or platform controls. They participate in normal document flow and SHOULD move or scroll naturally when the keyboard appears.
 
-If an unsupported transform is encountered, the runtime SHOULD show the SVG fallback and report a developer warning.
+Authors specify semantic properties such as label, value key, choices, validation and action. Sausage specifies detailed dimensions, focus behaviour, selection behaviour and platform integration.
 
-### 7.3 Layering — PROPOSED
+### 7.4 Exact overlay placement — DEFERRED
 
-Native controls are composited above the SVG surface.
+Positioning editable controls over exact SVG coordinates is not part of the initial design. It MAY be investigated later for a demonstrated application need, but Sausage MUST NOT require authors to solve SVG-to-screen coordinate mapping for ordinary input.
 
-Version 1 MAY support a small number of explicit native overlay layers, but it is not required to interleave arbitrary SVG and native elements by z-order.
-
-### 7.4 Synchronisation — PROPOSED
-
-The runtime MUST update a native control when its anchor changes due to:
-
-- DOM attribute changes;
-- visibility changes;
-- screen navigation;
-- orientation or viewport changes;
-- runtime-supported animation.
-
-Continuous high-frequency animation of native controls is not a v1 goal.
+SVG `<foreignObject>` and arbitrary author-authored HTML are not the foundation of the control model.
 
 ---
 
-## 8. Native controls
+## 8. Standard controls
 
 ### 8.1 General rule — DECIDED
 
-Ordinary visual buttons, panels, labels and custom widgets SHOULD be built from SVG.
+Sausage MUST use proven browser or platform controls for behaviours that are difficult to reproduce correctly, particularly text editing, cursor display, selection, copy and paste, keyboard input and accessible focus.
 
-Native controls are used where Android platform behaviour materially improves the application, especially text entry, accessibility and system pickers.
+SVG SHOULD be used for expressive visuals, animation and bespoke graphical interaction. Sausage MUST NOT grow a custom SVG text editor or a general-purpose widget toolkit.
 
-### 8.2 Proposed v1 controls
+### 8.2 Control vocabulary — PROPOSED
 
-| Control | `app:control` value | Status |
+The v1 vocabulary SHOULD remain small, stable and comparable in breadth to a classic VB6 toolbox:
+
+| Control | Proposed declaration | Status |
 |---|---|---|
-| Single-line text input | `text-field` | PROPOSED |
-| Multiline text input | `text-area` | PROPOSED |
-| Numeric input | `text-field` with input type | PROPOSED |
-| Password input | `text-field` with input type | PROPOSED |
-| Checkbox | `checkbox` | PROPOSED |
-| Switch | `switch` | PROPOSED |
-| Slider | `slider` | PROPOSED |
-| Dropdown/select | `select` | PROPOSED |
-| Date picker | `date-picker` | PROPOSED |
-| Time picker | `time-picker` | PROPOSED |
-| File picker trigger | host action, not persistent control | PROPOSED |
-| Native button | `button` | OPEN |
+| Read-only text/content | `app:text` | PROPOSED |
+| Standard action button | `app:button` | PROPOSED |
+| Single-line text input | `app:text-field` | PROPOSED |
+| Multiline text input | `app:text-area` | PROPOSED |
+| Numeric/password input | `app:text-field` with input type | PROPOSED |
+| Checkbox | `app:checkbox` | PROPOSED |
+| Switch | `app:switch` | PROPOSED |
+| Radio/choice group | `app:choice` | PROPOSED |
+| Dropdown/select or list | `app:select` | PROPOSED |
+| Slider | `app:slider` | PROPOSED |
+| Date input/picker | `app:date` | PROPOSED |
+| Time input/picker | `app:time` | PROPOSED |
+| Progress indicator | `app:progress` | PROPOSED |
+| File selection | host-mediated action | PROPOSED |
 
-### 8.3 Common attributes — PROPOSED
+New controls SHOULD be added only when a reference application demonstrates a recurring need.
 
-Possible common namespaced attributes:
+### 8.3 Common properties — PROPOSED
+
+Controls SHOULD expose a concise semantic vocabulary such as:
 
 ```text
-app:control
-app:value
-app:disabled
-app:required
-app:placeholder
-app:label
-app:input-type
-app:min
-app:max
-app:step
-app:options
-app:on-change
-app:on-focus
-app:on-blur
+key
+value
+label
+placeholder
+input-type
+options
+disabled
+required
+min
+max
+step
+on-change
+on-focus
+on-blur
+action
 ```
 
-Normal SVG attributes control the fallback appearance.
+Controls SHOULD NOT expose `x`, `y` or arbitrary per-control CSS. Declaration order determines flow order. A stable `key` binds the control to script and, where requested, persistent state.
 
-### 8.4 Styling — OPEN
+### 8.4 Styling — DECIDED IN PRINCIPLE
 
-Two possible models:
+Sausage owns the detailed appearance and interaction behaviour of standard controls so that they remain polished, consistent and accessible. A small amount of application-level theming MAY be offered for colour, typography density and overall mood.
 
-**A. Platform-native:** controls mostly use Android styling, with only size, theme and a few semantic options exposed.
-
-**B. Constrained theming:** Sausage exposes colours, corner radius, font and similar properties while preserving native behaviour.
-
-Full CSS-level styling of Android widgets is not proposed.
+Per-control CSS, arbitrary geometry and visual replacement of the underlying input behaviour are not goals. The runtime may implement controls using HTML in WebView today and another proven platform control later without changing document semantics.
 
 ---
 
@@ -469,18 +452,11 @@ const position = await sausage.location.current({
 });
 ```
 
-### 9.4 DOM-to-native state — PROPOSED
+### 9.4 Document-to-control state — PROPOSED
 
 Control state MUST be readable and writable through the host API.
 
-Where practical, changes to namespaced attributes SHOULD also update the native control:
-
-```javascript
-const field = document.getElementById("name");
-field.setAttributeNS(APP_NS, "app:value", "Len");
-```
-
-A simpler helper is preferred for application code:
+Direct changes to declarative control properties MAY be observed by the runtime, but the simple host API is preferred for application code:
 
 ```javascript
 sausage.controls.setValue("name", "Len");
@@ -488,16 +464,16 @@ sausage.controls.setValue("name", "Len");
 
 ### 9.5 Dynamic application structure — PROPOSED
 
-The initial runtime discovers screens, event attributes and native controls when a document loads. Application structure is declarative and SHOULD be present in the source document.
+The initial runtime discovers screens, slices, event attributes and standard controls when a document loads. Application structure is declarative and SHOULD be present in the source document.
 
 Application scripts MAY make simple changes to existing elements, including:
 
 - changing text content and attributes;
 - changing styles, classes and visibility;
-- updating existing native-control values;
+- updating existing standard-control values;
 - running animations on existing SVG content.
 
-The initial runtime is not required to discover dynamically created screens or native controls. Dynamic structural creation is deferred until a reference application demonstrates the need.
+The initial runtime is not required to discover dynamically created screens, slices or controls. Dynamic structural creation is deferred until a reference application demonstrates the need.
 
 ---
 
@@ -505,19 +481,19 @@ The initial runtime is not required to discover dynamically created screens or n
 
 ### 10.1 In-document screen model — PROPOSED
 
-A v1 application MAY contain multiple screens as ordinary SVG groups:
+A v1 application MAY contain multiple declarative screens. A screen may be a full graphical SVG group or an ordered flow of graphical and control slices:
 
 ```xml
-<g id="home" app:screen="home">
-  ...
-</g>
-
-<g id="settings" app:screen="settings" display="none">
-  ...
-</g>
+<metadata>
+  <app:screen id="journal">
+    <app:graphic ref="journal-art" />
+    <app:text-area key="dream" label="What do you remember?" />
+    <app:button action="saveDream">Save entry</app:button>
+  </app:screen>
+</metadata>
 ```
 
-Only the active screen is displayed.
+Only the active screen is displayed. The exact screen and slice syntax remains to be proven through a reference application before it is fixed.
 
 Navigation:
 
@@ -862,7 +838,7 @@ A packaged application SHOULD use a distinct extension rather than making `.svge
 
 A `.svge` file SHOULD remain viewable as useful static artwork whenever practical.
 
-Application authors SHOULD provide SVG fallback graphics for native controls.
+Standard SVG viewers will not show Sausage control slices declared in metadata. Authors SHOULD ensure that the remaining SVG artwork is still meaningful where practical; exact interactive fallback is not required.
 
 ---
 
@@ -914,15 +890,15 @@ Adaptive SHOULD be the default.
 
 ### 19.1 Requirement — DECIDED IN PRINCIPLE
 
-Accessibility is a core reason to use native controls.
+Accessibility is a core reason to use existing browser or platform controls rather than recreating complex inputs in SVG.
 
 ### 19.2 Proposed rules
 
-- Native controls MUST expose native Android accessibility semantics.
+- Standard controls MUST expose appropriate browser/platform accessibility semantics.
 - Interactive SVG elements SHOULD declare standard roles and accessible names.
-- `app:label` MAY supply a native accessible label.
+- Control labels MUST supply accessible names.
 - Focus order SHOULD follow document order unless explicitly overridden.
-- Android font scaling SHOULD affect native controls.
+- Android font scaling SHOULD affect standard controls and flow text.
 - Applications SHOULD avoid conveying state by colour alone.
 - The runtime SHOULD warn about interactive elements without accessible names.
 
@@ -948,8 +924,8 @@ Developer mode SHOULD provide:
 - unsupported feature warnings;
 - permission denials;
 - network request summaries;
-- native-control bounding boxes;
-- DOM/control synchronisation status;
+- screen and slice layout information;
+- document/control synchronisation status;
 - reload from file;
 - optional live-reload endpoint later.
 
@@ -1039,7 +1015,7 @@ A conforming v1 Sausage runtime MUST:
 3. recognise the v1 application namespace;
 4. process the embedded manifest;
 5. implement the v1 lifecycle;
-6. implement required native controls;
+6. implement required standard controls and ordered flow layout;
 7. implement permission mediation;
 8. isolate application storage;
 9. provide HTTP and local persistence;
@@ -1087,11 +1063,13 @@ These slices are an implementation sequence, not separate profile versions. Toge
 - Isolated SQLite database.
 - Demonstrate saved progress across a learning journey or lucid-dreaming flow.
 
-### Slice 4 — Native journal input
+### Slice 4 — Flow layout and journal input
 
+- Introduce the runtime-owned document-flow shell.
+- Render graphical and control slices in declaration order.
 - Text field and text area.
-- Overlay positioning and resize synchronisation.
-- Keyboard and focus handling.
+- Browser/platform cursor, selection, clipboard, keyboard and focus behaviour.
+- Responsive scrolling when the keyboard changes the viewport.
 - Demonstrate creating and reopening a dream-journal entry.
 
 ### Slice 5 — Additional application behaviour
@@ -1121,12 +1099,14 @@ These slices are an implementation sequence, not separate profile versions. Toge
 
 ## 25. Explicit non-goals for v1
 
-- General HTML rendering as an application feature.
+- Arbitrary author-supplied HTML or general web-app rendering.
 - Exposing WebView as a component.
 - Arbitrary native Android APIs.
 - Arbitrary background services.
-- Full CSS styling of native widgets.
-- Pixel-perfect interleaving of native controls and SVG layers.
+- Full CSS styling of standard controls.
+- Exact coordinate placement of standard controls over SVG.
+- Pixel-perfect interleaving of controls and SVG layers.
+- Reimplementing text editing, selection or other complex input behaviour in SVG.
 - 3D rendering.
 - Desktop and iOS runtimes.
 - APK compilation.
@@ -1147,10 +1127,10 @@ These slices are an implementation sequence, not separate profile versions. Toge
 
 ### Controls and rendering
 
-5. Should native controls use platform-native styling or constrained Sausage theming?
-6. Is a native button needed, or should buttons remain SVG?
-7. Does `app:control` replace its SVG fallback visually, or does the SVG remain as styling beneath a native interaction layer?
-8. Should v1 permit any rotation of native controls?
+5. What exact XML vocabulary declares ordered graphical and control slices?
+6. Which controls form the smallest useful v1 toolbox?
+7. Which small application-level theme choices should affect standard controls?
+8. How should graphical slices express preferred height, aspect ratio and scrolling behaviour?
 
 ### Capabilities
 
@@ -1173,8 +1153,8 @@ These slices are an implementation sequence, not separate profile versions. Toge
 The following decisions most strongly affect the next implementation slices:
 
 1. **Animation baseline:** which WebView-supported SVG and CSS animations generated applications may rely on.
-2. **Native control representation:** exactly how an annotated SVG anchor and its native control divide visual and interactive responsibility.
-3. **Page viewport behaviour:** sizing, safe areas, scrolling, orientation and keyboard resizing.
+2. **Flow vocabulary:** the smallest clear syntax for ordering graphical slices and standard controls.
+3. **Page viewport behaviour:** sizing, safe areas, scrolling, orientation and keyboard resizing in the flow shell.
 4. **First reference journey:** the smallest polished lucid-dreaming or animated learning-card flow that exercises the runtime.
 5. **Application root UX:** when Sausage asks for a directory and when it imports files into managed storage.
 
@@ -1188,10 +1168,12 @@ Sausage should initially be a simple Android runtime for AI-generated graphical 
 - standard SVG for almost all visuals;
 - a small `app:` namespace for application semantics;
 - WebView as the initial SVG renderer, DOM and JavaScript engine;
+- a runtime-owned document flow that can interleave SVG graphical slices with standard controls;
 - simple JavaScript acting directly on existing elements in the SVG DOM;
 - static, declarative screens and controls rather than script-generated application structure;
 - isolated document contexts, with persistent state shared through key-value storage or SQLite;
-- Android controls overlaid only where native behaviour is valuable;
+- a small VB6-sized vocabulary of real browser/platform controls, placed by document order rather than coordinates;
+- no reimplementation of text editing or other complex input behaviour inside SVG;
 - narrow promise-based APIs for HTTP, SQLite and device capabilities;
 - declared permissions and network origins;
 - useful static fallback in ordinary SVG viewers;

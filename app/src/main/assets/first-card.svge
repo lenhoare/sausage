@@ -9,7 +9,7 @@
     <app:manifest
         id="dev.sausage.journey-card"
         name="Journey Card"
-        version="0.0.1"
+        version="0.0.2"
         profile-version="1" />
   </metadata>
 
@@ -90,6 +90,11 @@
       opacity: 1;
       pointer-events: auto;
       transform: translateY(0) scale(1);
+    }
+
+    #scene.restoring #card-shell,
+    #scene.restoring .face {
+      transition: none;
     }
 
     #tap-ring {
@@ -194,7 +199,8 @@
         </text>
 
         <rect x="52" y="593" width="286" height="58" rx="18" fill="url(#button)" />
-        <text x="195" y="628" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0.8">GOT IT — TURN BACK</text>
+        <text x="195" y="622" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0.8">GOT IT — RESET CARD</text>
+        <text x="195" y="674" fill="#657a89" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1.1">PROGRESS SAVED ON THIS DEVICE</text>
       </g>
     </g>
 
@@ -208,15 +214,45 @@
     (() => {
       const scene = document.getElementById('scene');
       const card = document.getElementById('card-shell');
+      const stateKey = 'journey-card.revealed';
 
-      const toggleCard = () => {
-        const revealed = scene.classList.toggle('revealed');
+      const setCardState = (revealed) => {
+        scene.classList.toggle('revealed', revealed);
         card.setAttribute('aria-pressed', String(revealed));
         card.setAttribute(
           'aria-label',
-          revealed ? 'Turn the journey card back' : 'Reveal this journey card'
+          revealed ? 'Reset the journey card' : 'Reveal this journey card'
         );
       };
+
+      const toggleCard = async () => {
+        const revealed = !scene.classList.contains('revealed');
+        setCardState(revealed);
+
+        if (!window.sausage || !window.sausage.storage) return;
+
+        try {
+          if (revealed) {
+            await window.sausage.storage.set(stateKey, true);
+          } else {
+            await window.sausage.storage.remove(stateKey);
+          }
+        } catch (error) {
+          console.error('Could not save Journey Card progress', error);
+        }
+      };
+
+      window.addEventListener('sausage-ready', async () => {
+        scene.classList.add('restoring');
+        try {
+          const revealed = await window.sausage.storage.get(stateKey) === true;
+          setCardState(revealed);
+        } catch (error) {
+          console.error('Could not restore Journey Card progress', error);
+        } finally {
+          requestAnimationFrame(() => scene.classList.remove('restoring'));
+        }
+      }, { once: true });
 
       card.addEventListener('click', toggleCard);
       card.addEventListener('keydown', (event) => {

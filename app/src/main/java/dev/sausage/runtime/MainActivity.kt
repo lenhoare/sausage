@@ -280,6 +280,11 @@ class MainActivity : Activity() {
                 mediaPlaybackRequiresUserGesture = true
             }
 
+            addJavascriptInterface(
+                SausageStorageBridge(context, document.storageScope),
+                SausageStorageBridge.JAVASCRIPT_NAME,
+            )
+
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView,
@@ -292,8 +297,9 @@ class MainActivity : Activity() {
                 ): WebResourceResponse = loader.responseFor(request.url)
 
                 override fun onPageFinished(view: WebView, url: String) {
-                    view.evaluateJavascript(APPLY_RUNTIME_STYLES_SCRIPT, null)
-                    Log.i(TAG, "Rendered ${document.displayName}")
+                    view.evaluateJavascript(APPLY_RUNTIME_SCRIPT) {
+                        Log.i(TAG, "Rendered ${document.displayName}")
+                    }
                 }
 
                 override fun onReceivedError(
@@ -413,6 +419,7 @@ class MainActivity : Activity() {
             webView = null
             root.removeView(view)
             view.stopLoading()
+            view.removeJavascriptInterface(SausageStorageBridge.JAVASCRIPT_NAME)
             view.destroy()
         }
         root.removeAllViews()
@@ -446,8 +453,55 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        private const val APPLY_RUNTIME_STYLES_SCRIPT =
-            "document.documentElement.style.setProperty('-webkit-tap-highlight-color', 'transparent')"
+        private val APPLY_RUNTIME_SCRIPT = """
+            (() => {
+              document.documentElement.style.setProperty('-webkit-tap-highlight-color', 'transparent');
+
+              const nativeStorage = window.${SausageStorageBridge.JAVASCRIPT_NAME};
+              const requireKey = (key) => {
+                const value = String(key);
+                if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}${'$'}/.test(value)) {
+                  throw new TypeError('Storage keys must contain only letters, numbers, dot, underscore or hyphen.');
+                }
+                return value;
+              };
+
+              const storage = Object.freeze({
+                get(key) {
+                  return Promise.resolve().then(() => {
+                    const encoded = nativeStorage.get(requireKey(key));
+                    return encoded == null ? null : JSON.parse(encoded);
+                  });
+                },
+                set(key, value) {
+                  return Promise.resolve().then(() => {
+                    const encoded = JSON.stringify(value);
+                    if (encoded === undefined) {
+                      throw new TypeError('Storage values must be JSON-compatible.');
+                    }
+                    if (!nativeStorage.set(requireKey(key), encoded)) {
+                      throw new Error('Sausage could not store that value.');
+                    }
+                    return value;
+                  });
+                },
+                remove(key) {
+                  return Promise.resolve().then(() => {
+                    if (!nativeStorage.remove(requireKey(key))) {
+                      throw new Error('Sausage could not remove that value.');
+                    }
+                  });
+                },
+              });
+
+              Object.defineProperty(window, 'sausage', {
+                value: Object.freeze({ storage }),
+                writable: false,
+                configurable: false,
+              });
+              window.dispatchEvent(new Event('sausage-ready'));
+            })();
+        """.trimIndent()
         private const val TAG = "Sausage"
         private const val OPEN_DOCUMENT_REQUEST = 1001
         private const val BUNDLED_DOCUMENT = "first-card.svge"
