@@ -13,6 +13,8 @@ import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import kotlin.math.abs
+import kotlin.math.round
 
 internal data class SausageDocument(
     val displayName: String,
@@ -52,6 +54,15 @@ internal data class SausageChoice(
 internal data class SausageSwitch(
     val key: String,
     val label: String,
+) : SausageSlice
+
+internal data class SausageSlider(
+    val key: String,
+    val label: String,
+    val min: Double,
+    val max: Double,
+    val step: Double,
+    val value: Double,
 ) : SausageSlice
 
 internal data class SausageButton(
@@ -277,6 +288,43 @@ internal object SausageDocumentReader {
                                 ))
                             }
 
+                            SLIDER_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
+                                val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
+                                if (!CONTROL_KEY.matches(key)) {
+                                    throw SausageDocumentException("$displayName has an invalid slider control key.")
+                                }
+                                if (!controlKeys.add(key)) {
+                                    throw SausageDocumentException("$displayName uses the control key $key more than once.")
+                                }
+                                val min = parser.requiredFiniteDouble(SLIDER_MIN_ATTRIBUTE, displayName)
+                                val max = parser.requiredFiniteDouble(SLIDER_MAX_ATTRIBUTE, displayName)
+                                val step = parser.requiredFiniteDouble(SLIDER_STEP_ATTRIBUTE, displayName)
+                                val value = parser.requiredFiniteDouble(SLIDER_VALUE_ATTRIBUTE, displayName)
+                                if (min >= max) {
+                                    throw SausageDocumentException("$displayName has a slider whose min must be less than max.")
+                                }
+                                if (step <= 0.0) {
+                                    throw SausageDocumentException("$displayName has a slider whose step must be greater than zero.")
+                                }
+                                if (!isStepAligned(max, min, step)) {
+                                    throw SausageDocumentException("$displayName has a slider whose range does not align to its step.")
+                                }
+                                if (value !in min..max) {
+                                    throw SausageDocumentException("$displayName has a slider value outside its range.")
+                                }
+                                if (!isStepAligned(value, min, step)) {
+                                    throw SausageDocumentException("$displayName has a slider value that does not align to its step.")
+                                }
+                                currentScreenSlices?.add(SausageSlider(
+                                    key = key,
+                                    label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
+                                    min = min,
+                                    max = max,
+                                    step = step,
+                                    value = value,
+                                ))
+                            }
+
                             BUTTON_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
                                 val action = parser.optionalAttribute(BUTTON_ACTION_ATTRIBUTE)
                                 val targetScreen = parser.optionalAttribute(BUTTON_TARGET_SCREEN_ATTRIBUTE)
@@ -389,6 +437,17 @@ internal object SausageDocumentReader {
     private fun XmlPullParser.optionalAttribute(name: String): String? =
         getAttributeValue(null, name)?.takeIf(String::isNotBlank)
 
+    private fun XmlPullParser.requiredFiniteDouble(
+        name: String,
+        displayName: String,
+    ): Double {
+        val value = requiredAttribute(name, displayName).toDoubleOrNull()
+        if (value == null || !value.isFinite()) {
+            throw SausageDocumentException("$displayName has an invalid numeric $name attribute.")
+        }
+        return value
+    }
+
     private fun XmlPullParser.isDirectChildOf(parentDepth: Int?): Boolean =
         parentDepth != null && depth == parentDepth + 1
 
@@ -396,6 +455,16 @@ internal object SausageDocumentReader {
         .getInstance("SHA-256")
         .digest(toByteArray(StandardCharsets.UTF_8))
         .joinToString(separator = "") { byte -> "%02x".format(byte) }
+
+    private fun isStepAligned(
+        value: Double,
+        min: Double,
+        step: Double,
+    ): Boolean {
+        val stepCount = (value - min) / step
+        val tolerance = 1e-9 * maxOf(1.0, abs(stepCount))
+        return abs(stepCount - round(stepCount)) <= tolerance
+    }
 
     private const val MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
     private const val SVG_ROOT = "svg"
@@ -409,6 +478,7 @@ internal object SausageDocumentReader {
     private const val TEXT_AREA_ELEMENT = "text-area"
     private const val CHOICE_ELEMENT = "choice"
     private const val SWITCH_ELEMENT = "switch"
+    private const val SLIDER_ELEMENT = "slider"
     private const val BUTTON_ELEMENT = "button"
     private const val FLOW_GRAPHIC_REF_ATTRIBUTE = "ref"
     private const val CONTROL_KEY_ATTRIBUTE = "key"
@@ -416,6 +486,10 @@ internal object SausageDocumentReader {
     private const val CONTROL_HINT_ATTRIBUTE = "hint"
     private const val CONTROL_PLACEHOLDER_ATTRIBUTE = "placeholder"
     private const val CHOICE_OPTIONS_ATTRIBUTE = "options"
+    private const val SLIDER_MIN_ATTRIBUTE = "min"
+    private const val SLIDER_MAX_ATTRIBUTE = "max"
+    private const val SLIDER_STEP_ATTRIBUTE = "step"
+    private const val SLIDER_VALUE_ATTRIBUTE = "value"
     private const val BUTTON_ACTION_ATTRIBUTE = "action"
     private const val BUTTON_TARGET_SCREEN_ATTRIBUTE = "target-screen"
     private const val SVG_ID_ATTRIBUTE = "id"

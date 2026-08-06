@@ -26,6 +26,8 @@ The tenth slice adds semantic control change events. `sausage.controls.onChange(
 
 The eleventh slice adds `app:switch`, the first Boolean standard control. Sausage renders a real browser checkbox with accessible switch semantics, while its semantic API strictly reads, writes, persists and reports `true` or `false`. Dream Note records whether the dream was lucid, reveals a live animated SVG aura when enabled, and includes lucidity in its review.
 
+The twelfth slice adds `app:slider`, the first numeric standard control. Its finite bounds, step and initial value are validated before rendering; the semantic API strictly reads, writes and reports JavaScript numbers. Dragging updates the displayed value and Dream Note artwork continuously, while persistence waits for the committed change at release.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

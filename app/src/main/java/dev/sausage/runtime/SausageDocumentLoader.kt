@@ -257,6 +257,82 @@ internal class SausageDocumentLoader(
                     border-color: rgba(239, 170, 101, .54);
                     background: rgba(239, 170, 101, .1);
                   }
+                  .sausage-slider-heading {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 16px;
+                    margin-bottom: 13px;
+                  }
+                  .sausage-slider-heading label {
+                    margin: 0;
+                    color: #f5dfbb;
+                    font-size: 17px;
+                    font-weight: 700;
+                    line-height: 1.35;
+                    letter-spacing: .01em;
+                  }
+                  .sausage-slider-output {
+                    min-width: 44px;
+                    padding: 6px 10px;
+                    border: 1px solid rgba(239, 170, 101, .4);
+                    border-radius: 999px;
+                    background: rgba(239, 170, 101, .1);
+                    color: #fff4dc;
+                    font-size: 14px;
+                    font-weight: 800;
+                    text-align: center;
+                    font-variant-numeric: tabular-nums;
+                  }
+                  .sausage-slider-input {
+                    --sausage-slider-progress: 50%;
+                    display: block;
+                    width: 100%;
+                    height: 38px;
+                    margin: 0;
+                    border-radius: 16px;
+                    outline: none;
+                    background: transparent;
+                    cursor: pointer;
+                    -webkit-appearance: none;
+                    appearance: none;
+                  }
+                  .sausage-slider-input::-webkit-slider-runnable-track {
+                    height: 8px;
+                    border: 1px solid rgba(184, 207, 233, .22);
+                    border-radius: 999px;
+                    background: linear-gradient(
+                      to right,
+                      #efaa65 0,
+                      #efaa65 var(--sausage-slider-progress),
+                      rgba(7, 16, 30, .72) var(--sausage-slider-progress),
+                      rgba(7, 16, 30, .72) 100%
+                    );
+                    box-shadow: inset 0 1px 4px rgba(0, 0, 0, .25);
+                  }
+                  .sausage-slider-input::-webkit-slider-thumb {
+                    width: 26px;
+                    height: 26px;
+                    margin-top: -10px;
+                    border: 2px solid #efaa65;
+                    border-radius: 50%;
+                    background: #fffaf0;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, .36);
+                    -webkit-appearance: none;
+                    appearance: none;
+                  }
+                  .sausage-slider-input:focus-visible {
+                    box-shadow: 0 0 0 3px rgba(239, 170, 101, .28);
+                  }
+                  .sausage-slider-bounds {
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 1px 3px 0;
+                    color: #819ab7;
+                    font-size: 11px;
+                    font-weight: 650;
+                    font-variant-numeric: tabular-nums;
+                  }
                   .sausage-save-status {
                     min-height: 18px;
                     margin: 13px 2px 0;
@@ -467,6 +543,62 @@ internal class SausageDocumentLoader(
                       controlAdapters.set(input.dataset.controlKey, Object.freeze({
                         root: input,
                         getValue: () => input.checked,
+                        restore: (value) => applyValue(value, false),
+                        setValue: (value) => applyValue(value, true),
+                      }));
+                    });
+
+                    document.querySelectorAll('.sausage-slider-input[data-control-key]').forEach((input) => {
+                      const output = input.closest('.sausage-slider-control')
+                        .querySelector('.sausage-slider-output');
+                      const min = Number(input.min);
+                      const max = Number(input.max);
+                      const step = Number(input.step);
+                      const updatePresentation = () => {
+                        const value = input.valueAsNumber;
+                        output.value = input.value;
+                        output.textContent = input.value;
+                        const progress = ((value - min) / (max - min)) * 100;
+                        input.style.setProperty('--sausage-slider-progress', `${'$'}{progress}%`);
+                      };
+                      const normalizeValue = (value) => {
+                        if (typeof value !== 'number' || !Number.isFinite(value)) {
+                          throw new TypeError(
+                            `Sausage slider ${'$'}{input.dataset.controlKey} requires a finite number.`
+                          );
+                        }
+                        const tolerance = 1e-9 * Math.max(1, Math.abs(value), Math.abs(min), Math.abs(max));
+                        if (value < min - tolerance || value > max + tolerance) {
+                          throw new RangeError(
+                            `Value for Sausage slider ${'$'}{input.dataset.controlKey} is outside its range.`
+                          );
+                        }
+                        const stepCount = (value - min) / step;
+                        const roundedSteps = Math.round(stepCount);
+                        const stepTolerance = 1e-9 * Math.max(1, Math.abs(stepCount));
+                        if (Math.abs(stepCount - roundedSteps) > stepTolerance) {
+                          throw new RangeError(
+                            `Value for Sausage slider ${'$'}{input.dataset.controlKey} does not align to its step.`
+                          );
+                        }
+                        return Math.min(max, Math.max(min, min + roundedSteps * step));
+                      };
+                      const applyValue = (value, notify) => {
+                        const nextValue = normalizeValue(value);
+                        const changed = input.valueAsNumber !== nextValue;
+                        input.valueAsNumber = nextValue;
+                        updatePresentation();
+                        if (notify && changed) {
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                          input.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        return input.valueAsNumber;
+                      };
+                      input.addEventListener('input', updatePresentation);
+                      updatePresentation();
+                      controlAdapters.set(input.dataset.controlKey, Object.freeze({
+                        root: input,
+                        getValue: () => input.valueAsNumber,
                         restore: (value) => applyValue(value, false),
                         setValue: (value) => applyValue(value, true),
                       }));
@@ -722,6 +854,7 @@ internal class SausageDocumentLoader(
                 is SausageTextArea,
                 is SausageChoice,
                 is SausageSwitch,
+                is SausageSlider,
                 is SausageButton,
                 -> pendingControls += index to slice
             }
@@ -801,6 +934,36 @@ internal class SausageDocumentLoader(
             """.trimIndent()
         }
 
+        is SausageSlider -> {
+            val id = "sausage-slider-$screenId-$index"
+            val min = control.min.toHtmlNumber()
+            val max = control.max.toHtmlNumber()
+            val step = control.step.toHtmlNumber()
+            val value = control.value.toHtmlNumber()
+            """
+                <div class="sausage-control sausage-slider-control">
+                  <div class="sausage-slider-heading">
+                    <label for="$id">${control.label.escapeHtml()}</label>
+                    <output class="sausage-slider-output" for="$id">$value</output>
+                  </div>
+                  <input id="$id"
+                         class="sausage-slider-input sausage-value-control"
+                         type="range"
+                         min="$min"
+                         max="$max"
+                         step="$step"
+                         value="$value"
+                         data-control-key="${control.key.escapeHtml()}"
+                         data-control-description="slider">
+                  <div class="sausage-slider-bounds" aria-hidden="true">
+                    <span>$min</span>
+                    <span>$max</span>
+                  </div>
+                  <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
+                </div>
+            """.trimIndent()
+        }
+
         is SausageButton -> {
             val behaviour = control.action?.let {
                 "data-action=\"${it.escapeHtml()}\""
@@ -830,6 +993,8 @@ internal class SausageDocumentLoader(
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
+
+    private fun Double.toHtmlNumber(): String = toString().removeSuffix(".0")
 
     private fun textResponse(
         statusCode: Int,

@@ -25,6 +25,13 @@
       <app:switch
           key="dream-note.lucid"
           label="I knew I was dreaming" />
+      <app:slider
+          key="dream-note.intensity"
+          label="How intense did it feel?"
+          min="0"
+          max="10"
+          step="1"
+          value="5" />
       <app:button label="Hold this dream" action="captureDream" />
       <app:graphic ref="dream-confirmation" />
       <app:button label="Review this dream" target-screen="review" />
@@ -92,6 +99,12 @@
     #dream-header[data-lucid="true"] #lucid-aura {
       opacity: .82;
       animation: lucid-turn 12s linear infinite;
+    }
+    #intensity-ring {
+      opacity: .18;
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: opacity 100ms linear, transform 100ms linear;
     }
     #capture-burst {
       opacity: 0;
@@ -169,7 +182,7 @@
       .star-a, .star-b, #orbit, #capture-burst, #lucid-aura,
       .confirmation-ready, .confirmation-held, .confirmation-rings,
       .review-orbit { animation: none !important; }
-      #vividness-glow, #vividness-status { transition: none; }
+      #vividness-glow, #vividness-status, #intensity-ring { transition: none; }
       #dream-confirmation.confirmed .confirmation-ready { opacity: 0; }
       #dream-confirmation.confirmed .confirmation-held { opacity: 1; }
     }
@@ -191,6 +204,7 @@
     <text id="vividness-status" x="332.5" y="45" fill="#c9d9eb" font-size="8" font-weight="700" text-anchor="middle" letter-spacing="0.8">NOW</text>
 
     <circle id="vividness-glow" cx="195" cy="141" r="91" fill="#f8dba8" filter="url(#blur)" pointer-events="none" />
+    <circle id="intensity-ring" cx="195" cy="141" r="75" fill="none" stroke="#efaa65" stroke-width="1.5" pointer-events="none" />
     <g id="lucid-aura" fill="#fff4d6" pointer-events="none">
       <path d="M195 58 L198 64 L204 67 L198 70 L195 76 L192 70 L186 67 L192 64 Z" />
       <path d="M278 141 L284 144 L287 150 L290 144 L296 141 L290 138 L287 132 L284 138 Z" />
@@ -273,8 +287,9 @@
     </g>
 
     <text x="195" y="244" fill="#f7f1e7" font-size="27" font-weight="700" text-anchor="middle">A memory kept.</text>
-    <text id="review-word-count" x="195" y="275" fill="#9fb5cf" font-size="12" text-anchor="middle">Hold this dream to see what you caught.</text>
-    <path d="M70 308 H320" stroke="#dbeaff" stroke-width="1" opacity="0.12" />
+    <text id="review-word-count" x="195" y="267" fill="#9fb5cf" font-size="12" text-anchor="middle">Hold this dream to see what you caught.</text>
+    <text id="review-intensity" x="195" y="288" fill="#7893b2" font-size="11" font-weight="700" text-anchor="middle">Intensity awaits</text>
+    <path d="M70 311 H320" stroke="#dbeaff" stroke-width="1" opacity="0.12" />
   </g>
 
   <script type="application/ecmascript"><![CDATA[
@@ -282,9 +297,11 @@
       window.addEventListener('sausage-ready', () => {
         const header = document.getElementById('dream-header');
         const status = document.getElementById('vividness-status');
+        const intensityRing = document.getElementById('intensity-ring');
         const controls = window.sausage.controls;
         let vividness = controls.getValue('dream-note.vividness');
         let lucid = controls.getValue('dream-note.lucid');
+        let intensity = controls.getValue('dream-note.intensity');
         const updateHeaderState = () => {
           if (vividness == null) {
             header.removeAttribute('data-vividness');
@@ -298,9 +315,13 @@
           } else {
             header.removeAttribute('data-lucid');
           }
+          const intensityRatio = intensity / 10;
+          intensityRing.style.opacity = String(0.12 + intensityRatio * 0.58);
+          intensityRing.style.transform = `scale(${0.9 + intensityRatio * 0.24})`;
           const description = ['Dream note'];
           if (vividness != null) description.push(`${vividness.toLowerCase()} vividness`);
           description.push(lucid ? 'lucid' : 'not lucid');
+          description.push(`intensity ${intensity} of 10`);
           header.setAttribute('aria-label', description.join(', '));
         };
 
@@ -313,6 +334,10 @@
           lucid = value;
           updateHeaderState();
         });
+        controls.onChange('dream-note.intensity', (value) => {
+          intensity = value;
+          updateHeaderState();
+        });
       }, { once: true });
 
       window.captureDream = () => {
@@ -320,10 +345,12 @@
         const confirmation = document.getElementById('dream-confirmation');
         const review = document.getElementById('dream-review');
         const reviewWordCount = document.getElementById('review-word-count');
+        const reviewIntensity = document.getElementById('review-intensity');
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const note = window.sausage.controls.getValue('dream-note.body').trim();
         const vividness = window.sausage.controls.getValue('dream-note.vividness');
         const lucid = window.sausage.controls.getValue('dream-note.lucid');
+        const intensity = window.sausage.controls.getValue('dream-note.intensity');
         const wordCount = note === '' ? 0 : note.split(/\s+/u).length;
         const wordLabel = wordCount === 1 ? '1 word' : `${wordCount} words`;
         const vividnessLabel = vividness == null ? 'Vividness not chosen' : `${vividness} memory`;
@@ -331,9 +358,10 @@
         const reviewSummary = `${wordLabel} · ${vividnessLabel} · ${lucidityLabel}`;
 
         reviewWordCount.textContent = reviewSummary;
+        reviewIntensity.textContent = `Intensity ${intensity} of 10`;
         review.setAttribute(
           'aria-label',
-          `Dream review, ${wordLabel}, ${vividnessLabel.toLowerCase()}, ${lucidityLabel.toLowerCase()}`
+          `Dream review, ${wordLabel}, ${vividnessLabel.toLowerCase()}, ${lucidityLabel.toLowerCase()}, intensity ${intensity} of 10`
         );
 
         header.scrollIntoView({
