@@ -18,6 +18,10 @@
           label="What do you remember?"
           hint="A real browser text field—selection, clipboard and keyboard included."
           placeholder="A place, a feeling, a strange detail..." />
+      <app:choice
+          key="dream-note.vividness"
+          label="How vivid was it?"
+          options="Faint,Clear,Brilliant" />
       <app:button label="Hold this dream" action="captureDream" />
       <app:graphic ref="dream-confirmation" />
       <app:button label="Review this dream" target-screen="review" />
@@ -233,13 +237,17 @@
         const reviewWordCount = document.getElementById('review-word-count');
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const note = window.sausage.controls.getValue('dream-note.body').trim();
+        const vividness = window.sausage.controls.getValue('dream-note.vividness');
         const wordCount = note === '' ? 0 : note.split(/\s+/u).length;
-        const wordSummary = wordCount === 1
-          ? '1 word is waiting on the previous screen.'
-          : `${wordCount} words are waiting on the previous screen.`;
+        const wordLabel = wordCount === 1 ? '1 word' : `${wordCount} words`;
+        const vividnessLabel = vividness == null ? 'Vividness not chosen' : `${vividness} memory`;
+        const reviewSummary = `${wordLabel} · ${vividnessLabel}`;
 
-        reviewWordCount.textContent = wordSummary;
-        review.setAttribute('aria-label', `Dream review, ${wordCount} words safely held`);
+        reviewWordCount.textContent = reviewSummary;
+        review.setAttribute(
+          'aria-label',
+          `Dream review, ${wordLabel}, ${vividnessLabel.toLowerCase()}`
+        );
 
         header.scrollIntoView({
           behavior: reducedMotion ? 'auto' : 'smooth',

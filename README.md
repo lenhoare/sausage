@@ -20,6 +20,8 @@ The seventh slice adds multiple declarative screens. A button with `target-scree
 
 The eighth slice adds the semantic `sausage.controls` API. Document scripts synchronously read and write existing standard-control values by declared key without depending on runtime-generated HTML. Dream Note reads its text area through `getValue`, counts the captured words and updates existing SVG content on the review screen.
 
+The ninth slice adds the first typed value control: `app:choice`. Sausage turns a concise list of options into a polished, accessible browser radio group, persists the selection automatically, and exposes its selected string (or `null`) through the same `sausage.controls` API. Dream Note records how vivid a memory felt and includes that choice in its graphical review.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

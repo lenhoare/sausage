@@ -43,6 +43,12 @@ internal data class SausageTextArea(
     val placeholder: String?,
 ) : SausageSlice
 
+internal data class SausageChoice(
+    val key: String,
+    val label: String,
+    val options: List<String>,
+) : SausageSlice
+
 internal data class SausageButton(
     val label: String,
     val action: String?,
@@ -209,7 +215,7 @@ internal object SausageDocumentReader {
                             TEXT_AREA_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
                                 val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
                                 if (!CONTROL_KEY.matches(key)) {
-                                    throw SausageDocumentException("$displayName has an invalid text-area storage key.")
+                                    throw SausageDocumentException("$displayName has an invalid text-area control key.")
                                 }
                                 if (!controlKeys.add(key)) {
                                     throw SausageDocumentException("$displayName uses the control key $key more than once.")
@@ -219,6 +225,36 @@ internal object SausageDocumentReader {
                                     label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
                                     hint = parser.getAttributeValue(null, CONTROL_HINT_ATTRIBUTE),
                                     placeholder = parser.getAttributeValue(null, CONTROL_PLACEHOLDER_ATTRIBUTE),
+                                ))
+                            }
+
+                            CHOICE_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
+                                val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
+                                if (!CONTROL_KEY.matches(key)) {
+                                    throw SausageDocumentException("$displayName has an invalid choice control key.")
+                                }
+                                if (!controlKeys.add(key)) {
+                                    throw SausageDocumentException("$displayName uses the control key $key more than once.")
+                                }
+                                val options = parser
+                                    .requiredAttribute(CHOICE_OPTIONS_ATTRIBUTE, displayName)
+                                    .split(',')
+                                    .map(String::trim)
+                                if (options.size !in MIN_CHOICE_OPTIONS..MAX_CHOICE_OPTIONS) {
+                                    throw SausageDocumentException(
+                                        "$displayName has a choice that must declare between $MIN_CHOICE_OPTIONS and $MAX_CHOICE_OPTIONS options.",
+                                    )
+                                }
+                                if (options.any(String::isEmpty)) {
+                                    throw SausageDocumentException("$displayName has a choice with an empty option.")
+                                }
+                                if (options.toSet().size != options.size) {
+                                    throw SausageDocumentException("$displayName has a choice with duplicate options.")
+                                }
+                                currentScreenSlices?.add(SausageChoice(
+                                    key = key,
+                                    label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
+                                    options = options,
                                 ))
                             }
 
@@ -352,15 +388,19 @@ internal object SausageDocumentReader {
     private const val SCREEN_ID_ATTRIBUTE = "id"
     private const val GRAPHIC_ELEMENT = "graphic"
     private const val TEXT_AREA_ELEMENT = "text-area"
+    private const val CHOICE_ELEMENT = "choice"
     private const val BUTTON_ELEMENT = "button"
     private const val FLOW_GRAPHIC_REF_ATTRIBUTE = "ref"
     private const val CONTROL_KEY_ATTRIBUTE = "key"
     private const val CONTROL_LABEL_ATTRIBUTE = "label"
     private const val CONTROL_HINT_ATTRIBUTE = "hint"
     private const val CONTROL_PLACEHOLDER_ATTRIBUTE = "placeholder"
+    private const val CHOICE_OPTIONS_ATTRIBUTE = "options"
     private const val BUTTON_ACTION_ATTRIBUTE = "action"
     private const val BUTTON_TARGET_SCREEN_ATTRIBUTE = "target-screen"
     private const val SVG_ID_ATTRIBUTE = "id"
+    private const val MIN_CHOICE_OPTIONS = 2
+    private const val MAX_CHOICE_OPTIONS = 8
     private val APPLICATION_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
     private val CONTROL_KEY = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
     private val SCREEN_ID = Regex("[A-Za-z][A-Za-z0-9._-]{0,63}")

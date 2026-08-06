@@ -340,13 +340,13 @@ The v1 vocabulary SHOULD remain small, stable and comparable in breadth to a cla
 | Control | Proposed declaration | Status |
 |---|---|---|
 | Read-only text/content | `app:text` | PROPOSED |
-| Standard action button | `app:button` | PROPOSED |
+| Standard action button | `app:button` | INITIAL BASELINE PROVEN |
 | Single-line text input | `app:text-field` | PROPOSED |
-| Multiline text input | `app:text-area` | PROPOSED |
+| Multiline text input | `app:text-area` | INITIAL BASELINE PROVEN |
 | Numeric/password input | `app:text-field` with input type | PROPOSED |
 | Checkbox | `app:checkbox` | PROPOSED |
 | Switch | `app:switch` | PROPOSED |
-| Radio/choice group | `app:choice` | PROPOSED |
+| Radio/choice group | `app:choice` | INITIAL BASELINE PROVEN |
 | Dropdown/select or list | `app:select` | PROPOSED |
 | Slider | `app:slider` | PROPOSED |
 | Date input/picker | `app:date` | PROPOSED |
@@ -355,6 +355,8 @@ The v1 vocabulary SHOULD remain small, stable and comparable in breadth to a cla
 | File selection | host-mediated action | PROPOSED |
 
 New controls SHOULD be added only when a reference application demonstrates a recurring need.
+
+The initial `app:choice` declaration uses a short comma-separated `options` attribute. Sausage renders it as a native browser radio group with a fieldset and legend, owns its detailed presentation, and automatically persists its value by `key`. A choice declares between two and eight non-empty, unique options. Its semantic value is the selected option string, or `null` when no option is selected.
 
 ### 8.3 Common properties — PROPOSED
 
@@ -470,6 +472,8 @@ sausage.controls.setValue("name", "Len");
 ```
 
 The initial synchronous `getValue(key)` and `setValue(key, value)` API has been proven through Dream Note. It addresses controls by their declarative key and hides the runtime's generated HTML. An unknown or invalid key throws rather than silently selecting an unrelated element. `setValue` follows the control's ordinary change and persistence path.
+
+The API is intentionally type-independent. A text area returns a string; a choice returns its selected option string or `null`. Setting a choice to an undeclared option throws, while setting it to `null` clears the selection. This lets one semantic control key represent several underlying browser radio inputs without exposing generated HTML to application scripts.
 
 ### 9.5 Dynamic application structure — PROPOSED
 

@@ -98,7 +98,7 @@ internal class SausageDocumentLoader(
                     box-shadow: 0 22px 55px rgba(0, 0, 0, .28);
                   }
                   .sausage-control + .sausage-control { margin-top: 22px; }
-                  label {
+                  .sausage-text-area-control > label {
                     display: block;
                     margin-bottom: 9px;
                     color: #f5dfbb;
@@ -131,6 +131,60 @@ internal class SausageDocumentLoader(
                   .sausage-text-area:focus {
                     border-color: #efaa65;
                     box-shadow: 0 0 0 4px rgba(239, 170, 101, .17);
+                  }
+                  .sausage-choice {
+                    min-width: 0;
+                    margin: 0;
+                    padding: 0;
+                    border: 0;
+                  }
+                  .sausage-choice legend {
+                    display: block;
+                    width: 100%;
+                    margin: 0 0 14px;
+                    padding: 0;
+                    color: #f5dfbb;
+                    font-size: 17px;
+                    font-weight: 700;
+                    letter-spacing: .01em;
+                  }
+                  .sausage-choice-options {
+                    display: grid;
+                    gap: 10px;
+                  }
+                  .sausage-choice-option {
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    min-height: 54px;
+                    margin: 0;
+                    padding: 12px 15px;
+                    border: 1px solid rgba(184, 207, 233, .18);
+                    border-radius: 17px;
+                    background: rgba(255, 255, 255, .045);
+                    color: #dce7f4;
+                    font-size: 15px;
+                    font-weight: 650;
+                    line-height: 1.3;
+                    cursor: pointer;
+                    transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+                  }
+                  .sausage-choice-option:active { transform: scale(.99); }
+                  .sausage-choice-option:has(.sausage-choice-input:checked) {
+                    border-color: rgba(239, 170, 101, .7);
+                    background: rgba(239, 170, 101, .12);
+                    color: #fff4dc;
+                  }
+                  .sausage-choice-option:has(.sausage-choice-input:focus-visible) {
+                    outline: 3px solid rgba(239, 170, 101, .28);
+                    outline-offset: 2px;
+                  }
+                  .sausage-choice-input {
+                    width: 20px;
+                    height: 20px;
+                    flex: 0 0 auto;
+                    margin: 0 13px 0 0;
+                    accent-color: #efaa65;
                   }
                   .sausage-save-status {
                     min-height: 18px;
@@ -266,13 +320,63 @@ internal class SausageDocumentLoader(
                       configurable: false,
                     });
 
-                    const controlElements = new Map();
-                    document.querySelectorAll('[data-control-key]').forEach((control) => {
-                      controlElements.set(control.dataset.controlKey, control);
+                    const controlAdapters = new Map();
+
+                    document.querySelectorAll('.sausage-text-area[data-control-key]').forEach((input) => {
+                      controlAdapters.set(input.dataset.controlKey, Object.freeze({
+                        root: input,
+                        getValue: () => input.value,
+                        restore: (value) => {
+                          if (typeof value === 'string') input.value = value;
+                        },
+                        setValue: (value) => {
+                          const nextValue = value == null ? '' : String(value);
+                          input.value = nextValue;
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                          input.dispatchEvent(new Event('change', { bubbles: true }));
+                          return nextValue;
+                        },
+                      }));
+                    });
+
+                    document.querySelectorAll('.sausage-choice[data-control-key]').forEach((choice) => {
+                      const options = Array.from(choice.querySelectorAll('.sausage-choice-input'));
+                      const applyValue = (value, notify) => {
+                        const nextValue = value == null ? null : String(value);
+                        const selected = nextValue == null
+                          ? null
+                          : options.find((option) => option.value === nextValue);
+                        if (nextValue != null && !selected) {
+                          throw new RangeError(
+                            `Invalid value for Sausage control ${'$'}{choice.dataset.controlKey}: ${'$'}{nextValue}`
+                          );
+                        }
+                        const previous = options.find((option) => option.checked) || null;
+                        options.forEach((option) => {
+                          option.checked = option === selected;
+                        });
+                        if (notify && selected !== previous) {
+                          const eventTarget = selected || previous;
+                          if (eventTarget) {
+                            eventTarget.dispatchEvent(new Event('input', { bubbles: true }));
+                            eventTarget.dispatchEvent(new Event('change', { bubbles: true }));
+                          }
+                        }
+                        return nextValue;
+                      };
+                      controlAdapters.set(choice.dataset.controlKey, Object.freeze({
+                        root: choice,
+                        getValue: () => {
+                          const selected = options.find((option) => option.checked);
+                          return selected ? selected.value : null;
+                        },
+                        restore: (value) => applyValue(value, false),
+                        setValue: (value) => applyValue(value, true),
+                      }));
                     });
 
                     const requireControl = (key) => {
-                      const control = controlElements.get(String(key));
+                      const control = controlAdapters.get(String(key));
                       if (!control) {
                         throw new RangeError(`Unknown Sausage control: ${'$'}{key}`);
                       }
@@ -281,15 +385,10 @@ internal class SausageDocumentLoader(
 
                     const controlBridge = Object.freeze({
                       getValue(key) {
-                        return requireControl(key).value;
+                        return requireControl(key).getValue();
                       },
                       setValue(key, value) {
-                        const control = requireControl(key);
-                        const nextValue = value == null ? '' : String(value);
-                        control.value = nextValue;
-                        control.dispatchEvent(new Event('input', { bubbles: true }));
-                        control.dispatchEvent(new Event('change', { bubbles: true }));
-                        return nextValue;
+                        return requireControl(key).setValue(value);
                       },
                     });
 
@@ -297,43 +396,62 @@ internal class SausageDocumentLoader(
                       value: controlBridge,
                       configurable: false,
                     });
+                    Object.defineProperty(window, '__sausageControlAdapters', {
+                      value: Object.freeze({
+                        get(key) {
+                          return requireControl(key);
+                        },
+                      }),
+                      configurable: false,
+                    });
                   })();
 
                   Object.defineProperty(window, '__sausagePrepareDocument', {
                     value: async () => {
-                    const inputs = document.querySelectorAll('.sausage-text-area');
-                    for (const input of inputs) {
+                    const valueControls = document.querySelectorAll('.sausage-value-control');
+                    for (const input of valueControls) {
+                      const adapter = window.__sausageControlAdapters.get(input.dataset.controlKey);
                       const control = input.closest('.sausage-control');
                       const status = control.querySelector('.sausage-save-status');
                       const key = input.dataset.controlKey;
+                      const description = input.dataset.controlDescription;
                       let saveTimer;
 
                       try {
                         const saved = await window.sausage.storage.get(key);
-                        if (typeof saved === 'string') input.value = saved;
+                        if (saved !== null) adapter.restore(saved);
                       } catch (error) {
-                        status.textContent = 'Could not restore this text';
-                        console.error('Could not restore Sausage text area', error);
+                        status.textContent = `Could not restore this ${'$'}{description}`;
+                        console.error(`Could not restore Sausage ${'$'}{description}`, error);
                       }
 
                       const save = async () => {
+                        clearTimeout(saveTimer);
                         try {
-                          await window.sausage.storage.set(key, input.value);
+                          await window.sausage.storage.set(key, adapter.getValue());
                           status.textContent = 'Saved on this device';
                         } catch (error) {
-                          status.textContent = 'Could not save this text';
-                          console.error('Could not save Sausage text area', error);
+                          status.textContent = `Could not save this ${'$'}{description}`;
+                          console.error(`Could not save Sausage ${'$'}{description}`, error);
                         }
                       };
 
-                      input.addEventListener('input', () => {
-                        status.textContent = 'Saving…';
-                        clearTimeout(saveTimer);
-                        saveTimer = setTimeout(save, 180);
-                      });
-                      input.addEventListener('change', save);
+                      if (input.classList.contains('sausage-text-area')) {
+                        input.addEventListener('input', () => {
+                          status.textContent = 'Saving…';
+                          clearTimeout(saveTimer);
+                          saveTimer = setTimeout(save, 180);
+                        });
+                        input.addEventListener('change', save);
+                      } else {
+                        input.addEventListener('change', () => {
+                          status.textContent = 'Saving…';
+                          save();
+                        });
+                      }
                     }
 
+                    const inputs = document.querySelectorAll('.sausage-text-area');
                     const updateForKeyboard = () => {
                       const viewport = window.visualViewport;
                       const visibleHeight = viewport ? viewport.height : window.innerHeight;
@@ -466,6 +584,7 @@ internal class SausageDocumentLoader(
                 }
 
                 is SausageTextArea,
+                is SausageChoice,
                 is SausageButton,
                 -> pendingControls += index to slice
             }
@@ -489,10 +608,38 @@ internal class SausageDocumentLoader(
                   <label for="$id">${control.label.escapeHtml()}</label>
                   $hint
                   <textarea id="$id"
-                            class="sausage-text-area"
+                            class="sausage-text-area sausage-value-control"
                             data-control-key="${control.key.escapeHtml()}"
+                            data-control-description="text"
                             placeholder="${control.placeholder.orEmpty().escapeHtml()}"
                             spellcheck="true"></textarea>
+                  <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
+                </div>
+            """.trimIndent()
+        }
+
+        is SausageChoice -> {
+            val id = "sausage-choice-$screenId-$index"
+            val options = control.options.mapIndexed { optionIndex, option ->
+                """
+                    <label class="sausage-choice-option" for="$id-$optionIndex">
+                      <input id="$id-$optionIndex"
+                             class="sausage-choice-input"
+                             type="radio"
+                             name="$id"
+                             value="${option.escapeHtml()}">
+                      <span>${option.escapeHtml()}</span>
+                    </label>
+                """.trimIndent()
+            }.joinToString(separator = "")
+            """
+                <div class="sausage-control sausage-choice-control">
+                  <fieldset class="sausage-choice sausage-value-control"
+                            data-control-key="${control.key.escapeHtml()}"
+                            data-control-description="choice">
+                    <legend>${control.label.escapeHtml()}</legend>
+                    <div class="sausage-choice-options">$options</div>
+                  </fieldset>
                   <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
                 </div>
             """.trimIndent()
