@@ -17,7 +17,20 @@ import java.security.MessageDigest
 internal data class SausageDocument(
     val displayName: String,
     val storageScope: String,
+    val flow: SausageFlow?,
     val content: ByteArray,
+)
+
+internal data class SausageFlow(
+    val graphicRef: String,
+    val textArea: SausageTextArea,
+)
+
+internal data class SausageTextArea(
+    val key: String,
+    val label: String,
+    val hint: String?,
+    val placeholder: String?,
 )
 
 internal class SausageDocumentException(
@@ -69,11 +82,12 @@ internal object SausageDocumentReader {
         }
 
         val source = decodeUtf8(bytes, displayName)
-        val manifestId = validateSvg(source, displayName)
+        val inspection = inspectSvg(source, displayName)
 
         return SausageDocument(
             displayName = displayName,
-            storageScope = manifestId ?: "document:${source.sha256()}",
+            storageScope = inspection.manifestId ?: "document:${source.sha256()}",
+            flow = inspection.flow,
             content = source.toByteArray(StandardCharsets.UTF_8),
         )
     }
@@ -93,10 +107,10 @@ internal object SausageDocumentReader {
         throw SausageDocumentException("$displayName must use UTF-8 text encoding.", error)
     }
 
-    private fun validateSvg(
+    private fun inspectSvg(
         source: String,
         displayName: String,
-    ): String? {
+    ): DocumentInspection {
         if (source.contains("<!DOCTYPE", ignoreCase = true)) {
             throw SausageDocumentException("$displayName contains a document type declaration, which is not supported.")
         }
@@ -121,24 +135,85 @@ internal object SausageDocumentReader {
             }
 
             var manifestId: String? = null
+            var flowScreenDepth: Int? = null
+            var flowScreenCount = 0
+            var graphicRef: String? = null
+            var textArea: SausageTextArea? = null
+            val svgIds = mutableSetOf<String>()
+
             while (event != XmlPullParser.END_DOCUMENT) {
-                if (
-                    event == XmlPullParser.START_TAG &&
+                if (event == XmlPullParser.START_TAG) {
+                    if (parser.namespace == SVG_NAMESPACE) {
+                        parser.getAttributeValue(null, SVG_ID_ATTRIBUTE)?.let(svgIds::add)
+                    }
+
+                    if (parser.namespace == APP_NAMESPACE) {
+                        when (parser.name) {
+                            MANIFEST_ELEMENT -> {
+                                val candidate = parser.getAttributeValue(null, MANIFEST_ID_ATTRIBUTE)
+                                if (candidate.isNullOrBlank() || !APPLICATION_ID.matches(candidate)) {
+                                    throw SausageDocumentException("$displayName has an invalid Sausage application ID.")
+                                }
+                                if (manifestId != null && manifestId != candidate) {
+                                    throw SausageDocumentException("$displayName declares more than one Sausage application ID.")
+                                }
+                                manifestId = candidate
+                            }
+
+                            SCREEN_ELEMENT -> {
+                                flowScreenCount += 1
+                                if (flowScreenCount > 1) {
+                                    throw SausageDocumentException("$displayName uses more than one flow screen, which this slice does not support yet.")
+                                }
+                                flowScreenDepth = parser.depth
+                            }
+
+                            GRAPHIC_ELEMENT -> if (flowScreenDepth != null) {
+                                graphicRef = parser.requiredAttribute(
+                                    FLOW_GRAPHIC_REF_ATTRIBUTE,
+                                    displayName,
+                                )
+                            }
+
+                            TEXT_AREA_ELEMENT -> if (flowScreenDepth != null) {
+                                if (textArea != null) {
+                                    throw SausageDocumentException("$displayName uses more than one text area, which this slice does not support yet.")
+                                }
+                                val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
+                                if (!CONTROL_KEY.matches(key)) {
+                                    throw SausageDocumentException("$displayName has an invalid text-area storage key.")
+                                }
+                                textArea = SausageTextArea(
+                                    key = key,
+                                    label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
+                                    hint = parser.getAttributeValue(null, CONTROL_HINT_ATTRIBUTE),
+                                    placeholder = parser.getAttributeValue(null, CONTROL_PLACEHOLDER_ATTRIBUTE),
+                                )
+                            }
+                        }
+                    }
+                } else if (
+                    event == XmlPullParser.END_TAG &&
                     parser.namespace == APP_NAMESPACE &&
-                    parser.name == MANIFEST_ELEMENT
+                    parser.name == SCREEN_ELEMENT
                 ) {
-                    val candidate = parser.getAttributeValue(null, MANIFEST_ID_ATTRIBUTE)
-                    if (candidate.isNullOrBlank() || !APPLICATION_ID.matches(candidate)) {
-                        throw SausageDocumentException("$displayName has an invalid Sausage application ID.")
-                    }
-                    if (manifestId != null && manifestId != candidate) {
-                        throw SausageDocumentException("$displayName declares more than one Sausage application ID.")
-                    }
-                    manifestId = candidate
+                    flowScreenDepth = null
                 }
                 event = parser.next()
             }
-            manifestId
+
+            val flow = if (textArea != null) {
+                val resolvedGraphicRef = graphicRef
+                    ?: throw SausageDocumentException("$displayName has a flow control but no graphical slice.")
+                if (resolvedGraphicRef !in svgIds) {
+                    throw SausageDocumentException("$displayName refers to a missing SVG graphic: $resolvedGraphicRef.")
+                }
+                SausageFlow(resolvedGraphicRef, textArea)
+            } else {
+                null
+            }
+
+            DocumentInspection(manifestId, flow)
         } catch (error: SausageDocumentException) {
             throw error
         } catch (error: Exception) {
@@ -182,6 +257,12 @@ internal object SausageDocumentReader {
         return output.toByteArray()
     }
 
+    private fun XmlPullParser.requiredAttribute(
+        name: String,
+        displayName: String,
+    ): String = getAttributeValue(null, name)?.takeIf(String::isNotBlank)
+        ?: throw SausageDocumentException("$displayName is missing the required $name attribute.")
+
     private fun String.sha256(): String = MessageDigest
         .getInstance("SHA-256")
         .digest(toByteArray(StandardCharsets.UTF_8))
@@ -193,5 +274,20 @@ internal object SausageDocumentReader {
     private const val APP_NAMESPACE = "https://sausage.dev/ns/app/1"
     private const val MANIFEST_ELEMENT = "manifest"
     private const val MANIFEST_ID_ATTRIBUTE = "id"
+    private const val SCREEN_ELEMENT = "screen"
+    private const val GRAPHIC_ELEMENT = "graphic"
+    private const val TEXT_AREA_ELEMENT = "text-area"
+    private const val FLOW_GRAPHIC_REF_ATTRIBUTE = "ref"
+    private const val CONTROL_KEY_ATTRIBUTE = "key"
+    private const val CONTROL_LABEL_ATTRIBUTE = "label"
+    private const val CONTROL_HINT_ATTRIBUTE = "hint"
+    private const val CONTROL_PLACEHOLDER_ATTRIBUTE = "placeholder"
+    private const val SVG_ID_ATTRIBUTE = "id"
     private val APPLICATION_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+    private val CONTROL_KEY = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+    private data class DocumentInspection(
+        val manifestId: String?,
+        val flow: SausageFlow?,
+    )
 }

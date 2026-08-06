@@ -10,6 +10,8 @@ The third slice adds the first narrow host API. `sausage.storage` provides promi
 
 Storage is scoped by the Sausage manifest application ID. Documents without a manifest receive a content-derived private scope for this early slice. Values must be JSON-compatible, individual values are limited to 64 KB, and the current per-application allowance is 256 KB.
 
+The fourth slice introduces the first document-flow control. [`dream-note.svge`](app/src/main/assets/dream-note.svge) declares an SVG graphical slice followed by a full-width text area. Sausage renders that declaration as a real browser control in a controlled HTML shell, preserving platform cursor, selection, clipboard, keyboard, spellcheck and accessibility behaviour. The runtime uses Android keyboard insets to keep the focused control visible, and the note is automatically saved through `sausage.storage`.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

@@ -3,6 +3,7 @@ package dev.sausage.runtime
 import android.net.Uri
 import android.webkit.WebResourceResponse
 import java.io.ByteArrayInputStream
+import java.nio.charset.StandardCharsets
 
 internal class SausageDocumentLoader(
     private val document: SausageDocument,
@@ -17,8 +18,13 @@ internal class SausageDocumentLoader(
             )
         }
 
+        val response = document.flow?.let(::flowResponse) ?: DocumentResponse(
+            mimeType = SVG_MIME_TYPE,
+            content = document.content,
+        )
+
         return WebResourceResponse(
-            SVG_MIME_TYPE,
+            response.mimeType,
             UTF_8,
             200,
             "OK",
@@ -26,9 +32,216 @@ internal class SausageDocumentLoader(
                 "Cache-Control" to "no-store",
                 "Content-Security-Policy" to "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
             ),
-            ByteArrayInputStream(document.content),
+            ByteArrayInputStream(response.content),
         )
     }
+
+    private fun flowResponse(flow: SausageFlow): DocumentResponse {
+        val sourceSvg = document.content
+            .toString(StandardCharsets.UTF_8)
+            .replaceFirst(XML_DECLARATION, "")
+        val control = flow.textArea
+        val hint = control.hint?.let {
+            "<p class=\"sausage-hint\">${it.escapeHtml()}</p>"
+        }.orEmpty()
+        val html = """
+            <!doctype html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+                <title>${document.displayName.escapeHtml()}</title>
+                <style>
+                  :root {
+                    --sausage-keyboard-inset: 0px;
+                    color-scheme: dark;
+                    font-family: Inter, Roboto, Arial, sans-serif;
+                    background: #07101e;
+                  }
+                  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+                  html, body { margin: 0; min-height: 100%; background: #07101e; }
+                  body {
+                    color: #f8fafc;
+                    overscroll-behavior-y: none;
+                  }
+                  .sausage-graphic {
+                    width: 100%;
+                    overflow: hidden;
+                    background: #07101e;
+                  }
+                  .sausage-graphic > svg {
+                    display: block;
+                    width: 100%;
+                    height: auto;
+                  }
+                  .sausage-controls {
+                    position: relative;
+                    margin-top: -1px;
+                    padding: 24px 24px calc(36px + env(safe-area-inset-bottom) + var(--sausage-keyboard-inset));
+                    background: #07101e;
+                  }
+                  .sausage-control-card {
+                    padding: 22px;
+                    border: 1px solid rgba(184, 207, 233, .18);
+                    border-radius: 24px;
+                    background: linear-gradient(155deg, #10243b, #0b1b2e);
+                    box-shadow: 0 22px 55px rgba(0, 0, 0, .28);
+                  }
+                  label {
+                    display: block;
+                    margin-bottom: 9px;
+                    color: #f5dfbb;
+                    font-size: 17px;
+                    font-weight: 700;
+                    letter-spacing: .01em;
+                  }
+                  .sausage-hint {
+                    margin: 0 0 16px;
+                    color: #9fb5cf;
+                    font-size: 13px;
+                    line-height: 1.45;
+                  }
+                  textarea {
+                    display: block;
+                    width: 100%;
+                    min-height: 156px;
+                    resize: vertical;
+                    padding: 17px 18px;
+                    border: 2px solid transparent;
+                    border-radius: 18px;
+                    outline: none;
+                    background: #fffaf0;
+                    color: #172b3d;
+                    caret-color: #dd7e59;
+                    font: 400 16px/1.5 Inter, Roboto, Arial, sans-serif;
+                    box-shadow: inset 0 0 0 1px rgba(23, 43, 61, .12);
+                  }
+                  textarea::placeholder { color: #7c8994; opacity: 1; }
+                  textarea:focus {
+                    border-color: #efaa65;
+                    box-shadow: 0 0 0 4px rgba(239, 170, 101, .17);
+                  }
+                  .sausage-save-status {
+                    min-height: 18px;
+                    margin: 13px 2px 0;
+                    color: #8fa7c2;
+                    font-size: 12px;
+                    font-weight: 600;
+                    letter-spacing: .04em;
+                  }
+                </style>
+              </head>
+              <body>
+                <section class="sausage-graphic" aria-label="Graphical introduction">
+                  $sourceSvg
+                </section>
+                <section class="sausage-controls">
+                  <div class="sausage-control-card">
+                    <label for="sausage-text-area">${control.label.escapeHtml()}</label>
+                    $hint
+                    <textarea id="sausage-text-area"
+                              data-storage-key="${control.key.escapeHtml()}"
+                              placeholder="${control.placeholder.orEmpty().escapeHtml()}"
+                              spellcheck="true"></textarea>
+                    <p id="sausage-save-status" class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
+                  </div>
+                </section>
+                <script>
+                  window.addEventListener('sausage-ready', async () => {
+                    const input = document.getElementById('sausage-text-area');
+                    const status = document.getElementById('sausage-save-status');
+                    const key = input.dataset.storageKey;
+                    let saveTimer;
+
+                    try {
+                      const saved = await window.sausage.storage.get(key);
+                      if (typeof saved === 'string') input.value = saved;
+                    } catch (error) {
+                      status.textContent = 'Could not restore this note';
+                      console.error('Could not restore Dream Note', error);
+                    }
+
+                    const save = async () => {
+                      try {
+                        await window.sausage.storage.set(key, input.value);
+                        status.textContent = 'Saved on this device';
+                      } catch (error) {
+                        status.textContent = 'Could not save this note';
+                        console.error('Could not save Dream Note', error);
+                      }
+                    };
+
+                    input.addEventListener('input', () => {
+                      status.textContent = 'Saving…';
+                      clearTimeout(saveTimer);
+                      saveTimer = setTimeout(save, 180);
+                    });
+                    input.addEventListener('change', save);
+
+                    const updateForKeyboard = () => {
+                      const viewport = window.visualViewport;
+                      const visibleHeight = viewport ? viewport.height : window.innerHeight;
+                      const visibleTop = viewport ? viewport.offsetTop : 0;
+                      const keyboardInset = Math.max(
+                        0,
+                        window.innerHeight - visibleHeight - visibleTop
+                      );
+                      document.documentElement.style.setProperty(
+                        '--sausage-keyboard-inset',
+                        `${'$'}{keyboardInset}px`
+                      );
+
+                      if (document.activeElement !== input) return;
+
+                      requestAnimationFrame(() => {
+                        const activeViewport = window.visualViewport;
+                        const top = activeViewport ? activeViewport.offsetTop : 0;
+                        const height = activeViewport ? activeViewport.height : window.innerHeight;
+                        const bottom = top + height;
+                        const bounds = input.getBoundingClientRect();
+                        const breathingRoom = 20;
+
+                        if (bounds.bottom > bottom - breathingRoom) {
+                          window.scrollBy({
+                            top: bounds.bottom - bottom + breathingRoom,
+                            behavior: 'smooth',
+                          });
+                        } else if (bounds.top < top + breathingRoom) {
+                          window.scrollBy({
+                            top: bounds.top - top - breathingRoom,
+                            behavior: 'smooth',
+                          });
+                        }
+                      });
+                    };
+
+                    input.addEventListener('focus', () => {
+                      setTimeout(updateForKeyboard, 80);
+                      setTimeout(updateForKeyboard, 320);
+                    });
+                    input.addEventListener('blur', updateForKeyboard);
+                    window.addEventListener('resize', updateForKeyboard);
+                    if (window.visualViewport) {
+                      window.visualViewport.addEventListener('resize', updateForKeyboard);
+                    }
+                  }, { once: true });
+                </script>
+              </body>
+            </html>
+        """.trimIndent()
+
+        return DocumentResponse(
+            mimeType = HTML_MIME_TYPE,
+            content = html.toByteArray(StandardCharsets.UTF_8),
+        )
+    }
+
+    private fun String.escapeHtml(): String = this
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;")
 
     private fun textResponse(
         statusCode: Int,
@@ -46,6 +259,13 @@ internal class SausageDocumentLoader(
     companion object {
         const val DOCUMENT_URL = "https://app.sausage.local/document.svge"
         private const val SVG_MIME_TYPE = "image/svg+xml"
+        private const val HTML_MIME_TYPE = "text/html"
         private const val UTF_8 = "utf-8"
+        private val XML_DECLARATION = Regex("^\\s*<\\?xml[^?]*\\?>")
     }
+
+    private data class DocumentResponse(
+        val mimeType: String,
+        val content: ByteArray,
+    )
 }

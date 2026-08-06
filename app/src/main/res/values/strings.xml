@@ -3,11 +3,12 @@
     <string name="app_name">Sausage</string>
     <string name="home_eyebrow">SAUSAGE RUNTIME</string>
     <string name="home_title">Run a graphical journey</string>
-    <string name="home_description">Choose an AI-made .svge document from your device, or revisit the bundled Journey Card.</string>
+    <string name="home_description">Choose an AI-made .svge document, revisit the Journey Card, or try the first flowing input experiment.</string>
     <string name="open_document">Open a .svge file</string>
     <string name="open_document_accessibility">Open a Sausage SVG document from this device</string>
     <string name="open_sample">Open Journey Card</string>
-    <string name="home_footer">Slice 3 · Documents that remember</string>
+    <string name="open_input_sample">Open Dream Note</string>
+    <string name="home_footer">Slice 4 · SVG meets real input</string>
     <string name="document_accessibility">Sausage document: %1$s</string>
     <string name="document_load_error_title">Couldn’t open this journey</string>
     <string name="document_load_error_message">The bundled Sausage document could not be loaded.</string>

@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -30,6 +31,7 @@ class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private var webView: WebView? = null
     private var screen = Screen.HOME
+    private var keyboardInsetBottom = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,8 +41,32 @@ class MainActivity : Activity() {
             setBackgroundColor(BACKGROUND)
         }
         setContentView(root)
+        configureKeyboardInsets()
         configureBackNavigation()
         showHome()
+    }
+
+    private fun configureKeyboardInsets() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+
+        root.setOnApplyWindowInsetsListener { _, insets ->
+            keyboardInsetBottom = if (insets.isVisible(WindowInsets.Type.ime())) {
+                insets.getInsets(WindowInsets.Type.ime()).bottom
+            } else {
+                0
+            }
+            applyKeyboardInset()
+            insets
+        }
+    }
+
+    private fun applyKeyboardInset() {
+        val view = webView ?: return
+        val params = view.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (params.bottomMargin == keyboardInsetBottom) return
+
+        params.bottomMargin = keyboardInsetBottom
+        view.layoutParams = params
     }
 
     private fun configureBackNavigation() {
@@ -159,6 +185,18 @@ class MainActivity : Activity() {
             ),
         )
         content.addView(
+            actionButton(
+                label = getString(R.string.open_input_sample),
+                primary = false,
+                onClick = ::openInputSample,
+            ),
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = dp(58),
+                topMargin = dp(14),
+            ),
+        )
+        content.addView(
             TextView(this).apply {
                 text = getString(R.string.home_footer)
                 setTextColor(SUBTLE_TEXT)
@@ -242,8 +280,16 @@ class MainActivity : Activity() {
     }
 
     private fun openBundledDocument() {
+        openBundledDocument(BUNDLED_DOCUMENT)
+    }
+
+    private fun openInputSample() {
+        openBundledDocument(INPUT_DOCUMENT)
+    }
+
+    private fun openBundledDocument(assetName: String) {
         try {
-            val document = SausageDocumentReader.fromAsset(assets, BUNDLED_DOCUMENT)
+            val document = SausageDocumentReader.fromAsset(assets, assetName)
             Log.i(TAG, "Opening bundled document: ${document.displayName}")
             showDocument(document)
         } catch (error: SausageDocumentException) {
@@ -331,8 +377,11 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
+            ).apply {
+                bottomMargin = keyboardInsetBottom
+            },
         )
+        root.requestApplyInsets()
         view.loadUrl(SausageDocumentLoader.DOCUMENT_URL)
     }
 
@@ -505,6 +554,7 @@ class MainActivity : Activity() {
         private const val TAG = "Sausage"
         private const val OPEN_DOCUMENT_REQUEST = 1001
         private const val BUNDLED_DOCUMENT = "first-card.svge"
+        private const val INPUT_DOCUMENT = "dream-note.svge"
 
         private val BACKGROUND = Color.rgb(7, 16, 30)
         private val PANEL = Color.rgb(16, 36, 59)
