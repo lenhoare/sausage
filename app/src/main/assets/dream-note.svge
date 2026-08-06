@@ -20,6 +20,11 @@
           placeholder="A place, a feeling, a strange detail..." />
       <app:button label="Hold this dream" action="captureDream" />
       <app:graphic ref="dream-confirmation" />
+      <app:button label="Review this dream" target-screen="review" />
+    </app:screen>
+    <app:screen id="review">
+      <app:graphic ref="dream-review" />
+      <app:button label="Return to note" target-screen="note" />
     </app:screen>
   </metadata>
 
@@ -78,6 +83,11 @@
     #dream-confirmation.confirmed .confirmation-rings {
       animation: confirmation-rings 950ms cubic-bezier(.2, .85, .24, 1);
     }
+    #dream-review .review-orbit {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: review-breathe 5.2s ease-in-out infinite;
+    }
     @keyframes twinkle {
       0%, 100% { opacity: .22; }
       50% { opacity: .9; }
@@ -110,9 +120,14 @@
       42% { opacity: .82; }
       100% { opacity: .2; transform: scale(1.18); }
     }
+    @keyframes review-breathe {
+      0%, 100% { transform: translateY(0) scale(1); opacity: .72; }
+      50% { transform: translateY(-3px) scale(1.035); opacity: 1; }
+    }
     @media (prefers-reduced-motion: reduce) {
       .star-a, .star-b, #orbit, #capture-burst,
-      .confirmation-ready, .confirmation-held, .confirmation-rings { animation: none !important; }
+      .confirmation-ready, .confirmation-held, .confirmation-rings,
+      .review-orbit { animation: none !important; }
       #dream-confirmation.confirmed .confirmation-ready { opacity: 0; }
       #dream-confirmation.confirmed .confirmation-held { opacity: 1; }
     }
@@ -183,6 +198,30 @@
       <text x="195" y="245" fill="#f7f1e7" font-size="25" font-weight="700" text-anchor="middle">Dream held safely.</text>
       <text x="195" y="274" fill="#9fb5cf" font-size="12" text-anchor="middle">You can return whenever another detail surfaces.</text>
     </g>
+  </g>
+
+  <g id="dream-review" aria-label="Dream review screen">
+    <rect width="390" height="340" fill="url(#night)" />
+    <circle cx="195" cy="137" r="96" fill="url(#dream-glow)" opacity="0.26" filter="url(#blur)" />
+
+    <text x="24" y="45" fill="#9fb5cf" font-size="10" font-weight="700" letter-spacing="2.8">DREAM REVIEW</text>
+    <text x="366" y="45" fill="#c9d9eb" font-size="9" font-weight="700" text-anchor="end" letter-spacing="1">KEPT</text>
+
+    <g class="review-orbit">
+      <circle cx="195" cy="137" r="69" fill="#ffffff" opacity="0.045" />
+      <circle cx="195" cy="137" r="57" fill="none" stroke="#efaa65" stroke-width="1.5" opacity="0.55" />
+      <path d="M166 109 H215 C222 109 227 114 227 121 V169
+               C227 162 222 158 215 158 H166 Z"
+            fill="#fff4d6" opacity="0.94" />
+      <path d="M195 109 V158" stroke="#d5915e" stroke-width="2" opacity="0.65" />
+      <path d="M174 121 H187 M174 131 H187 M203 121 H218 M203 131 H218"
+            stroke="#9e7959" stroke-width="1.5" stroke-linecap="round" opacity="0.64" />
+      <circle cx="229" cy="103" r="5" fill="#f8dba8" />
+    </g>
+
+    <text x="195" y="244" fill="#f7f1e7" font-size="27" font-weight="700" text-anchor="middle">A memory kept.</text>
+    <text x="195" y="275" fill="#9fb5cf" font-size="12" text-anchor="middle">Your note is still waiting on the previous screen.</text>
+    <path d="M70 308 H320" stroke="#dbeaff" stroke-width="1" opacity="0.12" />
   </g>
 
   <script type="application/ecmascript"><![CDATA[

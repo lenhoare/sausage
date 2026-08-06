@@ -16,6 +16,8 @@ The fifth slice adds one declarative `app:button`. Sausage renders a standard ac
 
 The sixth slice replaces the fixed flow shape with an ordered slice model. A screen can declare multiple `app:graphic`, `app:text-area` and `app:button` slices in any useful sequence; consecutive controls share a polished control card while graphical slices remain independent SVG regions. Dream Note now ends with a second animated confirmation graphic after its controls.
 
+The seventh slice adds multiple declarative screens. A button with `target-screen` changes the active screen with a restrained transition, while Sausage maintains scroll-aware screen history and gives that history first refusal on Android Back. Dream Note can now move from its scrolling note journey to a separate review screen and return without losing the saved text.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

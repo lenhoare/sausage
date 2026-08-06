@@ -22,6 +22,11 @@ internal data class SausageDocument(
 )
 
 internal data class SausageFlow(
+    val screens: List<SausageScreen>,
+)
+
+internal data class SausageScreen(
+    val id: String,
     val slices: List<SausageSlice>,
 )
 
@@ -40,7 +45,8 @@ internal data class SausageTextArea(
 
 internal data class SausageButton(
     val label: String,
-    val action: String,
+    val action: String?,
+    val targetScreen: String?,
 ) : SausageSlice
 
 internal class SausageDocumentException(
@@ -145,9 +151,11 @@ internal object SausageDocumentReader {
             }
 
             var manifestId: String? = null
-            var flowScreenDepth: Int? = null
-            var flowScreenCount = 0
-            val flowSlices = mutableListOf<SausageSlice>()
+            var currentScreenDepth: Int? = null
+            var currentScreenId: String? = null
+            var currentScreenSlices: MutableList<SausageSlice>? = null
+            val flowScreens = mutableListOf<SausageScreen>()
+            val screenIds = mutableSetOf<String>()
             val controlKeys = mutableSetOf<String>()
             val graphicRefs = mutableSetOf<String>()
             val svgIds = mutableSetOf<String>()
@@ -172,14 +180,22 @@ internal object SausageDocumentReader {
                             }
 
                             SCREEN_ELEMENT -> {
-                                flowScreenCount += 1
-                                if (flowScreenCount > 1) {
-                                    throw SausageDocumentException("$displayName uses more than one flow screen, which this slice does not support yet.")
+                                if (currentScreenDepth != null) {
+                                    throw SausageDocumentException("$displayName nests one Sausage screen inside another.")
                                 }
-                                flowScreenDepth = parser.depth
+                                val id = parser.requiredAttribute(SCREEN_ID_ATTRIBUTE, displayName)
+                                if (!SCREEN_ID.matches(id)) {
+                                    throw SausageDocumentException("$displayName has an invalid screen ID.")
+                                }
+                                if (!screenIds.add(id)) {
+                                    throw SausageDocumentException("$displayName declares the screen $id more than once.")
+                                }
+                                currentScreenDepth = parser.depth
+                                currentScreenId = id
+                                currentScreenSlices = mutableListOf()
                             }
 
-                            GRAPHIC_ELEMENT -> if (parser.isDirectChildOf(flowScreenDepth)) {
+                            GRAPHIC_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
                                 val graphicRef = parser.requiredAttribute(
                                     FLOW_GRAPHIC_REF_ATTRIBUTE,
                                     displayName,
@@ -187,10 +203,10 @@ internal object SausageDocumentReader {
                                 if (!graphicRefs.add(graphicRef)) {
                                     throw SausageDocumentException("$displayName uses the SVG graphic $graphicRef more than once in one flow.")
                                 }
-                                flowSlices += SausageGraphic(graphicRef)
+                                currentScreenSlices?.add(SausageGraphic(graphicRef))
                             }
 
-                            TEXT_AREA_ELEMENT -> if (parser.isDirectChildOf(flowScreenDepth)) {
+                            TEXT_AREA_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
                                 val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
                                 if (!CONTROL_KEY.matches(key)) {
                                     throw SausageDocumentException("$displayName has an invalid text-area storage key.")
@@ -198,52 +214,69 @@ internal object SausageDocumentReader {
                                 if (!controlKeys.add(key)) {
                                     throw SausageDocumentException("$displayName uses the control key $key more than once.")
                                 }
-                                flowSlices += SausageTextArea(
+                                currentScreenSlices?.add(SausageTextArea(
                                     key = key,
                                     label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
                                     hint = parser.getAttributeValue(null, CONTROL_HINT_ATTRIBUTE),
                                     placeholder = parser.getAttributeValue(null, CONTROL_PLACEHOLDER_ATTRIBUTE),
-                                )
+                                ))
                             }
 
-                            BUTTON_ELEMENT -> if (parser.isDirectChildOf(flowScreenDepth)) {
-                                val action = parser.requiredAttribute(
-                                    BUTTON_ACTION_ATTRIBUTE,
-                                    displayName,
-                                )
-                                if (!ACTION_NAME.matches(action)) {
+                            BUTTON_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
+                                val action = parser.optionalAttribute(BUTTON_ACTION_ATTRIBUTE)
+                                val targetScreen = parser.optionalAttribute(BUTTON_TARGET_SCREEN_ATTRIBUTE)
+                                if ((action == null) == (targetScreen == null)) {
+                                    throw SausageDocumentException("$displayName has a button that must declare exactly one of action or target-screen.")
+                                }
+                                if (action != null && !ACTION_NAME.matches(action)) {
                                     throw SausageDocumentException("$displayName has an invalid button action name.")
                                 }
-                                flowSlices += SausageButton(
+                                if (targetScreen != null && !SCREEN_ID.matches(targetScreen)) {
+                                    throw SausageDocumentException("$displayName has an invalid button target screen.")
+                                }
+                                currentScreenSlices?.add(SausageButton(
                                     label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
                                     action = action,
-                                )
+                                    targetScreen = targetScreen,
+                                ))
                             }
                         }
                     }
                 } else if (
                     event == XmlPullParser.END_TAG &&
                     parser.namespace == APP_NAMESPACE &&
-                    parser.name == SCREEN_ELEMENT
+                    parser.name == SCREEN_ELEMENT &&
+                    parser.depth == currentScreenDepth
                 ) {
-                    flowScreenDepth = null
+                    val id = checkNotNull(currentScreenId)
+                    val slices = checkNotNull(currentScreenSlices).toList()
+                    if (slices.isEmpty()) {
+                        throw SausageDocumentException("$displayName has an empty flow screen: $id.")
+                    }
+                    if (slices.none { it is SausageGraphic }) {
+                        throw SausageDocumentException("$displayName has a flow screen without a graphical slice: $id.")
+                    }
+                    flowScreens += SausageScreen(id, slices)
+                    currentScreenDepth = null
+                    currentScreenId = null
+                    currentScreenSlices = null
                 }
                 event = parser.next()
             }
 
-            val flow = if (flowScreenCount == 1) {
-                if (flowSlices.isEmpty()) {
-                    throw SausageDocumentException("$displayName has an empty flow screen.")
-                }
-                if (flowSlices.none { it is SausageGraphic }) {
-                    throw SausageDocumentException("$displayName has a flow screen without a graphical slice.")
-                }
-                flowSlices.filterIsInstance<SausageGraphic>().forEach { graphic ->
+            val flow = if (flowScreens.isNotEmpty()) {
+                flowScreens.flatMap(SausageScreen::slices).filterIsInstance<SausageGraphic>().forEach { graphic ->
                     if (graphic.ref !in svgIds) {
                         throw SausageDocumentException("$displayName refers to a missing SVG graphic: ${graphic.ref}.")
                     }
                 }
-                SausageFlow(flowSlices.toList())
+                flowScreens.flatMap(SausageScreen::slices).filterIsInstance<SausageButton>().forEach { button ->
+                    val target = button.targetScreen
+                    if (target != null && target !in screenIds) {
+                        throw SausageDocumentException("$displayName has a button that targets a missing screen: $target.")
+                    }
+                }
+                SausageFlow(flowScreens.toList())
             } else {
                 null
             }
@@ -298,6 +331,9 @@ internal object SausageDocumentReader {
     ): String = getAttributeValue(null, name)?.takeIf(String::isNotBlank)
         ?: throw SausageDocumentException("$displayName is missing the required $name attribute.")
 
+    private fun XmlPullParser.optionalAttribute(name: String): String? =
+        getAttributeValue(null, name)?.takeIf(String::isNotBlank)
+
     private fun XmlPullParser.isDirectChildOf(parentDepth: Int?): Boolean =
         parentDepth != null && depth == parentDepth + 1
 
@@ -313,6 +349,7 @@ internal object SausageDocumentReader {
     private const val MANIFEST_ELEMENT = "manifest"
     private const val MANIFEST_ID_ATTRIBUTE = "id"
     private const val SCREEN_ELEMENT = "screen"
+    private const val SCREEN_ID_ATTRIBUTE = "id"
     private const val GRAPHIC_ELEMENT = "graphic"
     private const val TEXT_AREA_ELEMENT = "text-area"
     private const val BUTTON_ELEMENT = "button"
@@ -322,9 +359,11 @@ internal object SausageDocumentReader {
     private const val CONTROL_HINT_ATTRIBUTE = "hint"
     private const val CONTROL_PLACEHOLDER_ATTRIBUTE = "placeholder"
     private const val BUTTON_ACTION_ATTRIBUTE = "action"
+    private const val BUTTON_TARGET_SCREEN_ATTRIBUTE = "target-screen"
     private const val SVG_ID_ATTRIBUTE = "id"
     private val APPLICATION_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
     private val CONTROL_KEY = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+    private val SCREEN_ID = Regex("[A-Za-z][A-Za-z0-9._-]{0,63}")
     private val ACTION_NAME = Regex("[A-Za-z_${'$'}][A-Za-z0-9_${'$'}]{0,63}")
 
     private data class DocumentInspection(

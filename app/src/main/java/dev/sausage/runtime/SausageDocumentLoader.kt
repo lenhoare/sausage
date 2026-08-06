@@ -40,7 +40,7 @@ internal class SausageDocumentLoader(
         val sourceSvg = document.content
             .toString(StandardCharsets.UTF_8)
             .replaceFirst(XML_DECLARATION, "")
-        val sliceHtml = renderSlices(flow)
+        val screenHtml = renderScreens(flow)
         val html = """
             <!doctype html>
             <html lang="en">
@@ -61,6 +61,8 @@ internal class SausageDocumentLoader(
                     color: #f8fafc;
                     overscroll-behavior-y: none;
                   }
+                  .sausage-screen[hidden] { display: none; }
+                  .sausage-screen-entering { animation: screen-in 240ms ease-out; }
                   .sausage-svg-source {
                     position: absolute;
                     width: 0;
@@ -172,13 +174,20 @@ internal class SausageDocumentLoader(
                     0%, 100% { transform: scale(1); }
                     42% { transform: scale(.975); filter: brightness(1.16); }
                   }
+                  @keyframes screen-in {
+                    from { opacity: .18; transform: translateY(7px); }
+                    to { opacity: 1; transform: translateY(0); }
+                  }
+                  @media (prefers-reduced-motion: reduce) {
+                    .sausage-screen-entering { animation: none; }
+                  }
                 </style>
               </head>
               <body>
                 <div id="sausage-svg-source" class="sausage-svg-source" aria-hidden="true">
                   $sourceSvg
                 </div>
-                <main id="sausage-flow">$sliceHtml</main>
+                <main id="sausage-flow">$screenHtml</main>
                 <script>
                   (() => {
                     const svgNamespace = 'http://www.w3.org/2000/svg';
@@ -199,6 +208,62 @@ internal class SausageDocumentLoader(
                       svg.setAttribute('aria-hidden', 'false');
                       svg.appendChild(graphic);
                       slice.appendChild(svg);
+                    });
+
+                    let activeScreen = document.querySelector('.sausage-screen:not([hidden])');
+                    const screenHistory = [];
+
+                    const showScreen = (target, scrollY) => {
+                      if (!activeScreen || !target || target === activeScreen) return false;
+                      if (document.activeElement instanceof HTMLElement) {
+                        document.activeElement.blur();
+                      }
+                      activeScreen.hidden = true;
+                      activeScreen.setAttribute('aria-hidden', 'true');
+                      target.hidden = false;
+                      target.removeAttribute('aria-hidden');
+                      target.classList.remove('sausage-screen-entering');
+                      void target.offsetWidth;
+                      target.classList.add('sausage-screen-entering');
+                      activeScreen = target;
+                      window.scrollTo(0, scrollY);
+                      return true;
+                    };
+
+                    const findScreen = (id) => document.querySelector(
+                      `.sausage-screen[data-screen-id="${'$'}{CSS.escape(String(id))}"]`
+                    );
+
+                    const navigateTo = (targetId) => {
+                      const target = findScreen(targetId);
+                      if (!target || target === activeScreen) return false;
+
+                      const previous = screenHistory[screenHistory.length - 1];
+                      if (previous && previous.id === target.dataset.screenId) {
+                        screenHistory.pop();
+                        return showScreen(target, previous.scrollY);
+                      }
+
+                      screenHistory.push({
+                        id: activeScreen.dataset.screenId,
+                        scrollY: window.scrollY,
+                      });
+                      return showScreen(target, 0);
+                    };
+
+                    const navigateBack = () => {
+                      const previous = screenHistory.pop();
+                      if (!previous) return false;
+                      return showScreen(findScreen(previous.id), previous.scrollY);
+                    };
+
+                    Object.defineProperty(window, '__sausageNavigateTo', {
+                      value: navigateTo,
+                      configurable: false,
+                    });
+                    Object.defineProperty(window, '__sausageHandleBack', {
+                      value: navigateBack,
+                      configurable: false,
                     });
                   })();
 
@@ -293,6 +358,11 @@ internal class SausageDocumentLoader(
                         if (document.activeElement instanceof HTMLElement) {
                           document.activeElement.blur();
                         }
+                        const targetScreen = actionButton.dataset.targetScreen;
+                        if (targetScreen) {
+                          window.__sausageNavigateTo(targetScreen);
+                          return;
+                        }
                         actionButton.classList.remove('completed');
                         actionButton.setAttribute('aria-busy', 'true');
                         actionStatus.textContent = 'Running…';
@@ -325,7 +395,19 @@ internal class SausageDocumentLoader(
         )
     }
 
-    private fun renderSlices(flow: SausageFlow): String {
+    private fun renderScreens(flow: SausageFlow): String = flow.screens
+        .mapIndexed { index, screen ->
+            val hidden = if (index == 0) "" else " hidden aria-hidden=\"true\""
+            """
+                <section class="sausage-screen"
+                         data-screen-id="${screen.id.escapeHtml()}"$hidden>
+                  ${renderSlices(screen)}
+                </section>
+            """.trimIndent()
+        }
+        .joinToString(separator = "")
+
+    private fun renderSlices(screen: SausageScreen): String {
         val html = StringBuilder()
         val pendingControls = mutableListOf<Pair<Int, SausageSlice>>()
 
@@ -333,13 +415,13 @@ internal class SausageDocumentLoader(
             if (pendingControls.isEmpty()) return
             html.append("<section class=\"sausage-controls\"><div class=\"sausage-control-card\">")
             pendingControls.forEach { (index, control) ->
-                html.append(renderControl(control, index))
+                html.append(renderControl(control, screen.id, index))
             }
             html.append("</div></section>")
             pendingControls.clear()
         }
 
-        flow.slices.forEachIndexed { index, slice ->
+        screen.slices.forEachIndexed { index, slice ->
             when (slice) {
                 is SausageGraphic -> {
                     flushControls()
@@ -359,10 +441,11 @@ internal class SausageDocumentLoader(
 
     private fun renderControl(
         control: SausageSlice,
+        screenId: String,
         index: Int,
     ): String = when (control) {
         is SausageTextArea -> {
-            val id = "sausage-text-area-$index"
+            val id = "sausage-text-area-$screenId-$index"
             val hint = control.hint?.let {
                 "<p class=\"sausage-hint\">${it.escapeHtml()}</p>"
             }.orEmpty()
@@ -380,15 +463,25 @@ internal class SausageDocumentLoader(
             """.trimIndent()
         }
 
-        is SausageButton -> """
-            <div class="sausage-control sausage-button-control">
-              <button id="sausage-action-button-$index"
-                      class="sausage-action-button"
-                      type="button"
-                      data-action="${control.action.escapeHtml()}">${control.label.escapeHtml()}</button>
-              <p class="sausage-action-status" aria-live="polite">Ready</p>
-            </div>
-        """.trimIndent()
+        is SausageButton -> {
+            val behaviour = control.action?.let {
+                "data-action=\"${it.escapeHtml()}\""
+            } ?: "data-target-screen=\"${checkNotNull(control.targetScreen).escapeHtml()}\""
+            val status = if (control.action != null) {
+                "<p class=\"sausage-action-status\" aria-live=\"polite\">Ready</p>"
+            } else {
+                ""
+            }
+            """
+                <div class="sausage-control sausage-button-control">
+                  <button id="sausage-action-button-$screenId-$index"
+                          class="sausage-action-button"
+                          type="button"
+                          $behaviour>${control.label.escapeHtml()}</button>
+                  $status
+                </div>
+            """.trimIndent()
+        }
 
         is SausageGraphic -> error("A graphical slice cannot be rendered as a control.")
     }

@@ -483,10 +483,22 @@ class MainActivity : Activity() {
     }
 
     private fun handleBack() {
-        if (screen != Screen.HOME) {
-            showHome()
-        } else {
-            finishAfterTransition()
+        when (screen) {
+            Screen.DOCUMENT -> {
+                val currentView = webView
+                if (currentView == null) {
+                    showHome()
+                    return
+                }
+                currentView.evaluateJavascript(HANDLE_DOCUMENT_BACK_SCRIPT) { consumed ->
+                    if (consumed != "true" && screen == Screen.DOCUMENT && webView === currentView) {
+                        showHome()
+                    }
+                }
+            }
+
+            Screen.ERROR -> showHome()
+            Screen.HOME -> finishAfterTransition()
         }
     }
 
@@ -551,6 +563,8 @@ class MainActivity : Activity() {
               window.dispatchEvent(new Event('sausage-ready'));
             })();
         """.trimIndent()
+        private const val HANDLE_DOCUMENT_BACK_SCRIPT =
+            "typeof window.__sausageHandleBack === 'function' && window.__sausageHandleBack()"
         private const val TAG = "Sausage"
         private const val OPEN_DOCUMENT_REQUEST = 1001
         private const val BUNDLED_DOCUMENT = "first-card.svge"

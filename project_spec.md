@@ -496,11 +496,16 @@ A v1 application MAY contain multiple declarative screens. A screen may be a ful
     <app:text-area key="dream" label="What do you remember?" />
     <app:button label="Save entry" action="saveDream" />
     <app:graphic ref="saved-art" />
+    <app:button label="Review entry" target-screen="review" />
+  </app:screen>
+  <app:screen id="review">
+    <app:graphic ref="review-art" />
+    <app:button label="Return to journal" target-screen="journal" />
   </app:screen>
 </metadata>
 ```
 
-Only the active screen is displayed. The exact screen and slice syntax remains to be proven through a reference application before it is fixed.
+Only the active screen is displayed. The initial `app:screen` and `target-screen` syntax has now been proven through the Dream Note reference application. The first declared screen is initially active; navigation buttons move between existing declarative screens, and Android Back consumes the application-local screen history before leaving the document.
 
 Navigation:
 
