@@ -475,6 +475,18 @@ The initial synchronous `getValue(key)` and `setValue(key, value)` API has been 
 
 The API is intentionally type-independent. A text area returns a string; a choice returns its selected option string or `null`. Setting a choice to an undeclared option throws, while setting it to `null` clears the selection. This lets one semantic control key represent several underlying browser radio inputs without exposing generated HTML to application scripts.
 
+Scripts MAY observe later semantic value changes without inspecting runtime-generated controls:
+
+```javascript
+const stopListening = sausage.controls.onChange("clarity", (value) => {
+  updateExistingArtwork(value);
+});
+
+stopListening();
+```
+
+The initial synchronous `onChange(key, listener)` subscription has been proven through Dream Note. It reports the control's typed value after user interaction or `setValue()` changes that value, and returns an idempotent function that removes that individual subscription. Restoring persisted state does not emit a change; documents read their initial value after `sausage-ready`. Listener failures are isolated so they do not prevent persistence or other listeners from running.
+
 ### 9.5 Dynamic application structure — PROPOSED
 
 The initial runtime discovers screens, slices, event attributes and standard controls when a document loads. Application structure is declarative and SHOULD be present in the source document.

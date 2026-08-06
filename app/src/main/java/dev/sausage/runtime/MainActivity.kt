@@ -569,6 +569,15 @@ class MainActivity : Activity() {
                   }
                   return nativeControls.setValue(requireKey(key, 'Control'), value);
                 },
+                onChange(key, listener) {
+                  if (!nativeControls) {
+                    throw new Error('This document does not declare standard controls.');
+                  }
+                  if (typeof listener !== 'function') {
+                    throw new TypeError('Control change listeners must be functions.');
+                  }
+                  return nativeControls.onChange(requireKey(key, 'Control'), listener);
+                },
               });
 
               Object.defineProperty(window, 'sausage', {

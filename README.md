@@ -22,6 +22,8 @@ The eighth slice adds the semantic `sausage.controls` API. Document scripts sync
 
 The ninth slice adds the first typed value control: `app:choice`. Sausage turns a concise list of options into a polished, accessible browser radio group, persists the selection automatically, and exposes its selected string (or `null`) through the same `sausage.controls` API. Dream Note records how vivid a memory felt and includes that choice in its graphical review.
 
+The tenth slice adds semantic control change events. `sausage.controls.onChange(key, listener)` reports typed values without exposing runtime-generated HTML and returns an idempotent unsubscribe function. Dream Note uses the restored choice as its initial state, then changes its existing SVG moon glow and status badge immediately when vividness changes.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

@@ -59,6 +59,27 @@
       transform-origin: center;
       animation: breathe 4.6s ease-in-out infinite;
     }
+    #vividness-glow {
+      opacity: .1;
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: opacity 320ms ease, transform 320ms ease;
+    }
+    #dream-header[data-vividness="Faint"] #vividness-glow {
+      opacity: .18;
+      transform: scale(.96);
+    }
+    #dream-header[data-vividness="Clear"] #vividness-glow {
+      opacity: .42;
+      transform: scale(1.03);
+    }
+    #dream-header[data-vividness="Brilliant"] #vividness-glow {
+      opacity: .72;
+      transform: scale(1.1);
+    }
+    #vividness-status { transition: fill 240ms ease; }
+    #dream-header[data-vividness="Clear"] #vividness-status { fill: #f8dba8; }
+    #dream-header[data-vividness="Brilliant"] #vividness-status { fill: #fff4d6; }
     #capture-burst {
       opacity: 0;
       transform-box: fill-box;
@@ -132,6 +153,7 @@
       .star-a, .star-b, #orbit, #capture-burst,
       .confirmation-ready, .confirmation-held, .confirmation-rings,
       .review-orbit { animation: none !important; }
+      #vividness-glow, #vividness-status { transition: none; }
       #dream-confirmation.confirmed .confirmation-ready { opacity: 0; }
       #dream-confirmation.confirmed .confirmation-held { opacity: 1; }
     }
@@ -149,9 +171,10 @@
     </g>
 
     <text x="24" y="45" fill="#9fb5cf" font-size="10" font-weight="700" letter-spacing="2.8">DREAM NOTE</text>
-    <rect x="315" y="27" width="51" height="27" rx="13.5" fill="#ffffff" opacity="0.08" />
-    <text x="340.5" y="45" fill="#c9d9eb" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">NOW</text>
+    <rect x="299" y="27" width="67" height="27" rx="13.5" fill="#ffffff" opacity="0.08" />
+    <text id="vividness-status" x="332.5" y="45" fill="#c9d9eb" font-size="8" font-weight="700" text-anchor="middle" letter-spacing="0.8">NOW</text>
 
+    <circle id="vividness-glow" cx="195" cy="141" r="91" fill="#f8dba8" filter="url(#blur)" pointer-events="none" />
     <g id="orbit">
       <circle cx="195" cy="141" r="92" fill="url(#dream-glow)" opacity="0.72" filter="url(#blur)" />
       <circle cx="195" cy="141" r="61" fill="#f6d89f" opacity="0.1" />
@@ -230,6 +253,26 @@
 
   <script type="application/ecmascript"><![CDATA[
     (() => {
+      window.addEventListener('sausage-ready', () => {
+        const header = document.getElementById('dream-header');
+        const status = document.getElementById('vividness-status');
+        const controls = window.sausage.controls;
+        const applyVividness = (value) => {
+          if (value == null) {
+            header.removeAttribute('data-vividness');
+            header.setAttribute('aria-label', 'Dream note');
+            status.textContent = 'NOW';
+            return;
+          }
+          header.setAttribute('data-vividness', value);
+          header.setAttribute('aria-label', `Dream note, ${value.toLowerCase()} vividness`);
+          status.textContent = value.toUpperCase();
+        };
+
+        applyVividness(controls.getValue('dream-note.vividness'));
+        controls.onChange('dream-note.vividness', applyVividness);
+      }, { once: true });
+
       window.captureDream = () => {
         const header = document.getElementById('dream-header');
         const confirmation = document.getElementById('dream-confirmation');

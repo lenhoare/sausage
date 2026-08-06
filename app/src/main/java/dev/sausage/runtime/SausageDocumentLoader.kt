@@ -331,9 +331,12 @@ internal class SausageDocumentLoader(
                         },
                         setValue: (value) => {
                           const nextValue = value == null ? '' : String(value);
+                          const previousValue = input.value;
                           input.value = nextValue;
-                          input.dispatchEvent(new Event('input', { bubbles: true }));
-                          input.dispatchEvent(new Event('change', { bubbles: true }));
+                          if (nextValue !== previousValue) {
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                            input.dispatchEvent(new Event('change', { bubbles: true }));
+                          }
                           return nextValue;
                         },
                       }));
@@ -383,12 +386,51 @@ internal class SausageDocumentLoader(
                       return control;
                     };
 
+                    const changeListeners = new Map();
+                    const emitChange = (key) => {
+                      const listeners = changeListeners.get(key);
+                      if (!listeners) return;
+                      const value = requireControl(key).getValue();
+                      Array.from(listeners).forEach((subscription) => {
+                        try {
+                          subscription.listener(value);
+                        } catch (error) {
+                          console.error(`Sausage control listener failed for ${'$'}{key}`, error);
+                        }
+                      });
+                    };
+
+                    controlAdapters.forEach((adapter, key) => {
+                      adapter.root.addEventListener('input', () => emitChange(key));
+                    });
+
                     const controlBridge = Object.freeze({
                       getValue(key) {
                         return requireControl(key).getValue();
                       },
                       setValue(key, value) {
                         return requireControl(key).setValue(value);
+                      },
+                      onChange(key, listener) {
+                        const controlKey = String(key);
+                        requireControl(controlKey);
+                        if (typeof listener !== 'function') {
+                          throw new TypeError('Control change listeners must be functions.');
+                        }
+                        let listeners = changeListeners.get(controlKey);
+                        if (!listeners) {
+                          listeners = new Set();
+                          changeListeners.set(controlKey, listeners);
+                        }
+                        const subscription = { listener };
+                        let active = true;
+                        listeners.add(subscription);
+                        return () => {
+                          if (!active) return;
+                          active = false;
+                          listeners.delete(subscription);
+                          if (listeners.size === 0) changeListeners.delete(controlKey);
+                        };
                       },
                     });
 
