@@ -18,6 +18,7 @@
           label="What do you remember?"
           hint="A real browser text field—selection, clipboard and keyboard included."
           placeholder="A place, a feeling, a strange detail..." />
+      <app:button label="Hold this dream" action="captureDream" />
     </app:screen>
   </metadata>
 
@@ -48,6 +49,17 @@
       transform-origin: center;
       animation: breathe 4.6s ease-in-out infinite;
     }
+    #capture-burst {
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    #dream-header.captured #capture-burst {
+      animation: capture-burst 900ms cubic-bezier(.2, .85, .24, 1);
+    }
+    #dream-header.captured #orbit {
+      animation: capture-orbit 900ms cubic-bezier(.2, .85, .24, 1);
+    }
     @keyframes twinkle {
       0%, 100% { opacity: .22; }
       50% { opacity: .9; }
@@ -56,8 +68,20 @@
       0%, 100% { transform: translateY(0) scale(1); }
       50% { transform: translateY(-4px) scale(1.025); }
     }
+    @keyframes capture-burst {
+      0% { opacity: 0; transform: scale(.55) rotate(-8deg); }
+      24% { opacity: 1; }
+      72% { opacity: .78; }
+      100% { opacity: 0; transform: scale(1.42) rotate(8deg); }
+    }
+    @keyframes capture-orbit {
+      0% { transform: scale(1); }
+      35% { transform: scale(.9); }
+      68% { transform: scale(1.09); }
+      100% { transform: scale(1); }
+    }
     @media (prefers-reduced-motion: reduce) {
-      .star-a, .star-b, #orbit { animation: none; }
+      .star-a, .star-b, #orbit, #capture-burst { animation: none; }
     }
   </style>
 
@@ -84,6 +108,15 @@
       <path d="M156 170 C172 180, 215 182, 234 163" fill="none" stroke="#efaa65" stroke-width="2" stroke-linecap="round" opacity="0.7" />
     </g>
 
+    <g id="capture-burst" fill="none" stroke-linecap="round" pointer-events="none">
+      <circle cx="195" cy="141" r="70" stroke="#efaa65" stroke-width="2" opacity="0.9" />
+      <circle cx="195" cy="141" r="82" stroke="#dbeaff" stroke-width="1" stroke-dasharray="3 9" opacity="0.72" />
+      <path d="M195 45 V62 M195 220 V237 M99 141 H116 M274 141 H291"
+            stroke="#f8dba8" stroke-width="3" />
+      <path d="M127 73 L139 85 M251 197 L263 209 M263 73 L251 85 M139 197 L127 209"
+            stroke="#dbeaff" stroke-width="2" />
+    </g>
+
     <text x="195" y="246" fill="#f7f1e7" font-size="27" font-weight="700" text-anchor="middle">Catch it before it fades.</text>
     <text x="195" y="278" fill="#9fb5cf" font-size="13" text-anchor="middle">Write freely. You can make sense of it later.</text>
 
@@ -92,4 +125,30 @@
     <path d="M0 329 C72 309, 151 343, 230 323 C299 306, 350 317, 390 328"
           fill="none" stroke="#efaa65" stroke-width="1.5" opacity="0.32" />
   </g>
+
+  <script type="application/ecmascript"><![CDATA[
+    (() => {
+      window.captureDream = () => {
+        const header = document.getElementById('dream-header');
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        header.scrollIntoView({
+          behavior: reducedMotion ? 'auto' : 'smooth',
+          block: 'start'
+        });
+
+        return new Promise((resolve) => {
+          window.setTimeout(() => {
+            header.classList.remove('captured');
+            void header.getBoundingClientRect();
+            header.classList.add('captured');
+            window.setTimeout(() => {
+              header.classList.remove('captured');
+              resolve('Dream held safely');
+            }, reducedMotion ? 0 : 900);
+          }, reducedMotion ? 0 : 260);
+        });
+      };
+    })();
+  ]]></script>
 </svg>

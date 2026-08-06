@@ -12,6 +12,8 @@ Storage is scoped by the Sausage manifest application ID. Documents without a ma
 
 The fourth slice introduces the first document-flow control. [`dream-note.svge`](app/src/main/assets/dream-note.svge) declares an SVG graphical slice followed by a full-width text area. Sausage renders that declaration as a real browser control in a controlled HTML shell, preserving platform cursor, selection, clipboard, keyboard, spellcheck and accessibility behaviour. The runtime uses Android keyboard insets to keep the focused control visible, and the note is automatically saved through `sausage.storage`.
 
+The fifth slice adds one declarative `app:button`. Sausage renders a standard accessible browser button, validates its named action and invokes the matching document function. Dream Note's “Hold this dream” action scrolls back to its SVG slice and runs a repeatable SVG capture animation.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

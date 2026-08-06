@@ -24,6 +24,7 @@ internal data class SausageDocument(
 internal data class SausageFlow(
     val graphicRef: String,
     val textArea: SausageTextArea,
+    val button: SausageButton?,
 )
 
 internal data class SausageTextArea(
@@ -31,6 +32,11 @@ internal data class SausageTextArea(
     val label: String,
     val hint: String?,
     val placeholder: String?,
+)
+
+internal data class SausageButton(
+    val label: String,
+    val action: String,
 )
 
 internal class SausageDocumentException(
@@ -139,6 +145,7 @@ internal object SausageDocumentReader {
             var flowScreenCount = 0
             var graphicRef: String? = null
             var textArea: SausageTextArea? = null
+            var button: SausageButton? = null
             val svgIds = mutableSetOf<String>()
 
             while (event != XmlPullParser.END_DOCUMENT) {
@@ -190,6 +197,23 @@ internal object SausageDocumentReader {
                                     placeholder = parser.getAttributeValue(null, CONTROL_PLACEHOLDER_ATTRIBUTE),
                                 )
                             }
+
+                            BUTTON_ELEMENT -> if (flowScreenDepth != null) {
+                                if (button != null) {
+                                    throw SausageDocumentException("$displayName uses more than one button, which this slice does not support yet.")
+                                }
+                                val action = parser.requiredAttribute(
+                                    BUTTON_ACTION_ATTRIBUTE,
+                                    displayName,
+                                )
+                                if (!ACTION_NAME.matches(action)) {
+                                    throw SausageDocumentException("$displayName has an invalid button action name.")
+                                }
+                                button = SausageButton(
+                                    label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
+                                    action = action,
+                                )
+                            }
                         }
                     }
                 } else if (
@@ -208,8 +232,11 @@ internal object SausageDocumentReader {
                 if (resolvedGraphicRef !in svgIds) {
                     throw SausageDocumentException("$displayName refers to a missing SVG graphic: $resolvedGraphicRef.")
                 }
-                SausageFlow(resolvedGraphicRef, textArea)
+                SausageFlow(resolvedGraphicRef, textArea, button)
             } else {
+                if (button != null) {
+                    throw SausageDocumentException("$displayName uses a button without the text-area flow required by this slice.")
+                }
                 null
             }
 
@@ -277,14 +304,17 @@ internal object SausageDocumentReader {
     private const val SCREEN_ELEMENT = "screen"
     private const val GRAPHIC_ELEMENT = "graphic"
     private const val TEXT_AREA_ELEMENT = "text-area"
+    private const val BUTTON_ELEMENT = "button"
     private const val FLOW_GRAPHIC_REF_ATTRIBUTE = "ref"
     private const val CONTROL_KEY_ATTRIBUTE = "key"
     private const val CONTROL_LABEL_ATTRIBUTE = "label"
     private const val CONTROL_HINT_ATTRIBUTE = "hint"
     private const val CONTROL_PLACEHOLDER_ATTRIBUTE = "placeholder"
+    private const val BUTTON_ACTION_ATTRIBUTE = "action"
     private const val SVG_ID_ATTRIBUTE = "id"
     private val APPLICATION_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
     private val CONTROL_KEY = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+    private val ACTION_NAME = Regex("[A-Za-z_${'$'}][A-Za-z0-9_${'$'}]{0,63}")
 
     private data class DocumentInspection(
         val manifestId: String?,
