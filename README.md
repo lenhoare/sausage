@@ -24,6 +24,8 @@ The ninth slice adds the first typed value control: `app:choice`. Sausage turns 
 
 The tenth slice adds semantic control change events. `sausage.controls.onChange(key, listener)` reports typed values without exposing runtime-generated HTML and returns an idempotent unsubscribe function. Dream Note uses the restored choice as its initial state, then changes its existing SVG moon glow and status badge immediately when vividness changes.
 
+The eleventh slice adds `app:switch`, the first Boolean standard control. Sausage renders a real browser checkbox with accessible switch semantics, while its semantic API strictly reads, writes, persists and reports `true` or `false`. Dream Note records whether the dream was lucid, reveals a live animated SVG aura when enabled, and includes lucidity in its review.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

@@ -22,6 +22,9 @@
           key="dream-note.vividness"
           label="How vivid was it?"
           options="Faint,Clear,Brilliant" />
+      <app:switch
+          key="dream-note.lucid"
+          label="I knew I was dreaming" />
       <app:button label="Hold this dream" action="captureDream" />
       <app:graphic ref="dream-confirmation" />
       <app:button label="Review this dream" target-screen="review" />
@@ -80,6 +83,16 @@
     #vividness-status { transition: fill 240ms ease; }
     #dream-header[data-vividness="Clear"] #vividness-status { fill: #f8dba8; }
     #dream-header[data-vividness="Brilliant"] #vividness-status { fill: #fff4d6; }
+    #lucid-aura {
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: opacity 280ms ease;
+    }
+    #dream-header[data-lucid="true"] #lucid-aura {
+      opacity: .82;
+      animation: lucid-turn 12s linear infinite;
+    }
     #capture-burst {
       opacity: 0;
       transform-box: fill-box;
@@ -127,6 +140,9 @@
       72% { opacity: .78; }
       100% { opacity: 0; transform: scale(1.42) rotate(8deg); }
     }
+    @keyframes lucid-turn {
+      to { transform: rotate(360deg); }
+    }
     @keyframes capture-orbit {
       0% { transform: scale(1); }
       35% { transform: scale(.9); }
@@ -150,7 +166,7 @@
       50% { transform: translateY(-3px) scale(1.035); opacity: 1; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .star-a, .star-b, #orbit, #capture-burst,
+      .star-a, .star-b, #orbit, #capture-burst, #lucid-aura,
       .confirmation-ready, .confirmation-held, .confirmation-rings,
       .review-orbit { animation: none !important; }
       #vividness-glow, #vividness-status { transition: none; }
@@ -175,6 +191,16 @@
     <text id="vividness-status" x="332.5" y="45" fill="#c9d9eb" font-size="8" font-weight="700" text-anchor="middle" letter-spacing="0.8">NOW</text>
 
     <circle id="vividness-glow" cx="195" cy="141" r="91" fill="#f8dba8" filter="url(#blur)" pointer-events="none" />
+    <g id="lucid-aura" fill="#fff4d6" pointer-events="none">
+      <path d="M195 58 L198 64 L204 67 L198 70 L195 76 L192 70 L186 67 L192 64 Z" />
+      <path d="M278 141 L284 144 L287 150 L290 144 L296 141 L290 138 L287 132 L284 138 Z" />
+      <path d="M195 206 L198 212 L204 215 L198 218 L195 224 L192 218 L186 215 L192 212 Z" />
+      <path d="M94 141 L100 144 L103 150 L106 144 L112 141 L106 138 L103 132 L100 138 Z" />
+      <circle cx="239" cy="71" r="2" />
+      <circle cx="267" cy="185" r="2" />
+      <circle cx="151" cy="211" r="2" />
+      <circle cx="123" cy="97" r="2" />
+    </g>
     <g id="orbit">
       <circle cx="195" cy="141" r="92" fill="url(#dream-glow)" opacity="0.72" filter="url(#blur)" />
       <circle cx="195" cy="141" r="61" fill="#f6d89f" opacity="0.1" />
@@ -257,20 +283,36 @@
         const header = document.getElementById('dream-header');
         const status = document.getElementById('vividness-status');
         const controls = window.sausage.controls;
-        const applyVividness = (value) => {
-          if (value == null) {
+        let vividness = controls.getValue('dream-note.vividness');
+        let lucid = controls.getValue('dream-note.lucid');
+        const updateHeaderState = () => {
+          if (vividness == null) {
             header.removeAttribute('data-vividness');
-            header.setAttribute('aria-label', 'Dream note');
             status.textContent = 'NOW';
-            return;
+          } else {
+            header.setAttribute('data-vividness', vividness);
+            status.textContent = vividness.toUpperCase();
           }
-          header.setAttribute('data-vividness', value);
-          header.setAttribute('aria-label', `Dream note, ${value.toLowerCase()} vividness`);
-          status.textContent = value.toUpperCase();
+          if (lucid) {
+            header.setAttribute('data-lucid', 'true');
+          } else {
+            header.removeAttribute('data-lucid');
+          }
+          const description = ['Dream note'];
+          if (vividness != null) description.push(`${vividness.toLowerCase()} vividness`);
+          description.push(lucid ? 'lucid' : 'not lucid');
+          header.setAttribute('aria-label', description.join(', '));
         };
 
-        applyVividness(controls.getValue('dream-note.vividness'));
-        controls.onChange('dream-note.vividness', applyVividness);
+        updateHeaderState();
+        controls.onChange('dream-note.vividness', (value) => {
+          vividness = value;
+          updateHeaderState();
+        });
+        controls.onChange('dream-note.lucid', (value) => {
+          lucid = value;
+          updateHeaderState();
+        });
       }, { once: true });
 
       window.captureDream = () => {
@@ -281,15 +323,17 @@
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const note = window.sausage.controls.getValue('dream-note.body').trim();
         const vividness = window.sausage.controls.getValue('dream-note.vividness');
+        const lucid = window.sausage.controls.getValue('dream-note.lucid');
         const wordCount = note === '' ? 0 : note.split(/\s+/u).length;
         const wordLabel = wordCount === 1 ? '1 word' : `${wordCount} words`;
         const vividnessLabel = vividness == null ? 'Vividness not chosen' : `${vividness} memory`;
-        const reviewSummary = `${wordLabel} · ${vividnessLabel}`;
+        const lucidityLabel = lucid ? 'Lucid' : 'Not lucid';
+        const reviewSummary = `${wordLabel} · ${vividnessLabel} · ${lucidityLabel}`;
 
         reviewWordCount.textContent = reviewSummary;
         review.setAttribute(
           'aria-label',
-          `Dream review, ${wordLabel}, ${vividnessLabel.toLowerCase()}`
+          `Dream review, ${wordLabel}, ${vividnessLabel.toLowerCase()}, ${lucidityLabel.toLowerCase()}`
         );
 
         header.scrollIntoView({

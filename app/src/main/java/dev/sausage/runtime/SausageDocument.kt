@@ -49,6 +49,11 @@ internal data class SausageChoice(
     val options: List<String>,
 ) : SausageSlice
 
+internal data class SausageSwitch(
+    val key: String,
+    val label: String,
+) : SausageSlice
+
 internal data class SausageButton(
     val label: String,
     val action: String?,
@@ -258,6 +263,20 @@ internal object SausageDocumentReader {
                                 ))
                             }
 
+                            SWITCH_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
+                                val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
+                                if (!CONTROL_KEY.matches(key)) {
+                                    throw SausageDocumentException("$displayName has an invalid switch control key.")
+                                }
+                                if (!controlKeys.add(key)) {
+                                    throw SausageDocumentException("$displayName uses the control key $key more than once.")
+                                }
+                                currentScreenSlices?.add(SausageSwitch(
+                                    key = key,
+                                    label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
+                                ))
+                            }
+
                             BUTTON_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
                                 val action = parser.optionalAttribute(BUTTON_ACTION_ATTRIBUTE)
                                 val targetScreen = parser.optionalAttribute(BUTTON_TARGET_SCREEN_ATTRIBUTE)
@@ -389,6 +408,7 @@ internal object SausageDocumentReader {
     private const val GRAPHIC_ELEMENT = "graphic"
     private const val TEXT_AREA_ELEMENT = "text-area"
     private const val CHOICE_ELEMENT = "choice"
+    private const val SWITCH_ELEMENT = "switch"
     private const val BUTTON_ELEMENT = "button"
     private const val FLOW_GRAPHIC_REF_ATTRIBUTE = "ref"
     private const val CONTROL_KEY_ATTRIBUTE = "key"

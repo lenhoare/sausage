@@ -186,6 +186,77 @@ internal class SausageDocumentLoader(
                     margin: 0 13px 0 0;
                     accent-color: #efaa65;
                   }
+                  .sausage-switch-row {
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    min-height: 68px;
+                    margin: 0;
+                    padding: 14px 15px;
+                    border: 1px solid rgba(184, 207, 233, .18);
+                    border-radius: 17px;
+                    background: rgba(255, 255, 255, .045);
+                    color: #f5dfbb;
+                    cursor: pointer;
+                    transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+                  }
+                  .sausage-switch-row:active { transform: scale(.99); }
+                  .sausage-switch-copy {
+                    min-width: 0;
+                    padding-right: 16px;
+                    font-size: 16px;
+                    font-weight: 700;
+                    line-height: 1.35;
+                  }
+                  .sausage-switch-input {
+                    position: absolute;
+                    width: 1px;
+                    height: 1px;
+                    margin: -1px;
+                    overflow: hidden;
+                    opacity: 0;
+                    pointer-events: none;
+                  }
+                  .sausage-switch-track {
+                    position: relative;
+                    width: 52px;
+                    height: 30px;
+                    flex: 0 0 auto;
+                    border: 1px solid rgba(184, 207, 233, .32);
+                    border-radius: 999px;
+                    background: rgba(7, 16, 30, .68);
+                    box-shadow: inset 0 1px 4px rgba(0, 0, 0, .24);
+                    transition: border-color 180ms ease, background 180ms ease;
+                  }
+                  .sausage-switch-track::after {
+                    content: '';
+                    position: absolute;
+                    top: 3px;
+                    left: 3px;
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    background: #d8e4f1;
+                    box-shadow: 0 3px 9px rgba(0, 0, 0, .34);
+                    transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background 180ms ease;
+                  }
+                  .sausage-switch-input:checked + .sausage-switch-track {
+                    border-color: #efaa65;
+                    background: linear-gradient(135deg, #f6bf76, #e9895d);
+                  }
+                  .sausage-switch-input:checked + .sausage-switch-track::after {
+                    transform: translateX(22px);
+                    background: #fffaf0;
+                  }
+                  .sausage-switch-input:focus-visible + .sausage-switch-track {
+                    outline: 3px solid rgba(239, 170, 101, .3);
+                    outline-offset: 3px;
+                  }
+                  .sausage-switch-row:has(.sausage-switch-input:checked) {
+                    border-color: rgba(239, 170, 101, .54);
+                    background: rgba(239, 170, 101, .1);
+                  }
                   .sausage-save-status {
                     min-height: 18px;
                     margin: 13px 2px 0;
@@ -373,6 +444,29 @@ internal class SausageDocumentLoader(
                           const selected = options.find((option) => option.checked);
                           return selected ? selected.value : null;
                         },
+                        restore: (value) => applyValue(value, false),
+                        setValue: (value) => applyValue(value, true),
+                      }));
+                    });
+
+                    document.querySelectorAll('.sausage-switch-input[data-control-key]').forEach((input) => {
+                      const applyValue = (value, notify) => {
+                        if (typeof value !== 'boolean') {
+                          throw new TypeError(
+                            `Sausage switch ${'$'}{input.dataset.controlKey} requires a Boolean value.`
+                          );
+                        }
+                        const changed = input.checked !== value;
+                        input.checked = value;
+                        if (notify && changed) {
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                          input.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        return value;
+                      };
+                      controlAdapters.set(input.dataset.controlKey, Object.freeze({
+                        root: input,
+                        getValue: () => input.checked,
                         restore: (value) => applyValue(value, false),
                         setValue: (value) => applyValue(value, true),
                       }));
@@ -627,6 +721,7 @@ internal class SausageDocumentLoader(
 
                 is SausageTextArea,
                 is SausageChoice,
+                is SausageSwitch,
                 is SausageButton,
                 -> pendingControls += index to slice
             }
@@ -682,6 +777,25 @@ internal class SausageDocumentLoader(
                     <legend>${control.label.escapeHtml()}</legend>
                     <div class="sausage-choice-options">$options</div>
                   </fieldset>
+                  <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
+                </div>
+            """.trimIndent()
+        }
+
+        is SausageSwitch -> {
+            val id = "sausage-switch-$screenId-$index"
+            """
+                <div class="sausage-control sausage-switch-control">
+                  <label class="sausage-switch-row" for="$id">
+                    <span class="sausage-switch-copy">${control.label.escapeHtml()}</span>
+                    <input id="$id"
+                           class="sausage-switch-input sausage-value-control"
+                           type="checkbox"
+                           role="switch"
+                           data-control-key="${control.key.escapeHtml()}"
+                           data-control-description="switch">
+                    <span class="sausage-switch-track" aria-hidden="true"></span>
+                  </label>
                   <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
                 </div>
             """.trimIndent()

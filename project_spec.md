@@ -345,7 +345,7 @@ The v1 vocabulary SHOULD remain small, stable and comparable in breadth to a cla
 | Multiline text input | `app:text-area` | INITIAL BASELINE PROVEN |
 | Numeric/password input | `app:text-field` with input type | PROPOSED |
 | Checkbox | `app:checkbox` | PROPOSED |
-| Switch | `app:switch` | PROPOSED |
+| Switch | `app:switch` | INITIAL BASELINE PROVEN |
 | Radio/choice group | `app:choice` | INITIAL BASELINE PROVEN |
 | Dropdown/select or list | `app:select` | PROPOSED |
 | Slider | `app:slider` | PROPOSED |
@@ -357,6 +357,8 @@ The v1 vocabulary SHOULD remain small, stable and comparable in breadth to a cla
 New controls SHOULD be added only when a reference application demonstrates a recurring need.
 
 The initial `app:choice` declaration uses a short comma-separated `options` attribute. Sausage renders it as a native browser radio group with a fieldset and legend, owns its detailed presentation, and automatically persists its value by `key`. A choice declares between two and eight non-empty, unique options. Its semantic value is the selected option string, or `null` when no option is selected.
+
+The initial `app:switch` declaration requires only a `key` and `label`. Sausage renders a real browser checkbox with switch accessibility semantics and owns the polished track presentation around it. Its semantic value is always Boolean: a new switch defaults to `false`, stored `false` is restored as a real value, and `setValue()` rejects non-Boolean values rather than coercing them.
 
 ### 8.3 Common properties — PROPOSED
 
@@ -473,7 +475,7 @@ sausage.controls.setValue("name", "Len");
 
 The initial synchronous `getValue(key)` and `setValue(key, value)` API has been proven through Dream Note. It addresses controls by their declarative key and hides the runtime's generated HTML. An unknown or invalid key throws rather than silently selecting an unrelated element. `setValue` follows the control's ordinary change and persistence path.
 
-The API is intentionally type-independent. A text area returns a string; a choice returns its selected option string or `null`. Setting a choice to an undeclared option throws, while setting it to `null` clears the selection. This lets one semantic control key represent several underlying browser radio inputs without exposing generated HTML to application scripts.
+The API is intentionally type-independent. A text area returns a string; a choice returns its selected option string or `null`; a switch returns a Boolean. Setting a choice to an undeclared option throws, while setting it to `null` clears the selection. A switch accepts only `true` or `false`. This lets one semantic control key represent the appropriate underlying browser control without exposing generated HTML to application scripts.
 
 Scripts MAY observe later semantic value changes without inspecting runtime-generated controls:
 

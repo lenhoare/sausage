@@ -8,7 +8,7 @@
     <string name="open_document_accessibility">Open a Sausage SVG document from this device</string>
     <string name="open_sample">Open Journey Card</string>
     <string name="open_input_sample">Open Dream Note</string>
-    <string name="home_footer">Slice 10 · Live control events</string>
+    <string name="home_footer">Slice 11 · Boolean switch</string>
     <string name="document_accessibility">Sausage document: %1$s</string>
     <string name="document_load_error_title">Couldn’t open this journey</string>
     <string name="document_load_error_message">The bundled Sausage document could not be loaded.</string>
