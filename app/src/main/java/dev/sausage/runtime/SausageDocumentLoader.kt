@@ -265,14 +265,47 @@ internal class SausageDocumentLoader(
                       value: navigateBack,
                       configurable: false,
                     });
+
+                    const controlElements = new Map();
+                    document.querySelectorAll('[data-control-key]').forEach((control) => {
+                      controlElements.set(control.dataset.controlKey, control);
+                    });
+
+                    const requireControl = (key) => {
+                      const control = controlElements.get(String(key));
+                      if (!control) {
+                        throw new RangeError(`Unknown Sausage control: ${'$'}{key}`);
+                      }
+                      return control;
+                    };
+
+                    const controlBridge = Object.freeze({
+                      getValue(key) {
+                        return requireControl(key).value;
+                      },
+                      setValue(key, value) {
+                        const control = requireControl(key);
+                        const nextValue = value == null ? '' : String(value);
+                        control.value = nextValue;
+                        control.dispatchEvent(new Event('input', { bubbles: true }));
+                        control.dispatchEvent(new Event('change', { bubbles: true }));
+                        return nextValue;
+                      },
+                    });
+
+                    Object.defineProperty(window, '__sausageControls', {
+                      value: controlBridge,
+                      configurable: false,
+                    });
                   })();
 
-                  window.addEventListener('sausage-ready', async () => {
+                  Object.defineProperty(window, '__sausagePrepareDocument', {
+                    value: async () => {
                     const inputs = document.querySelectorAll('.sausage-text-area');
                     for (const input of inputs) {
                       const control = input.closest('.sausage-control');
                       const status = control.querySelector('.sausage-save-status');
-                      const key = input.dataset.storageKey;
+                      const key = input.dataset.controlKey;
                       let saveTimer;
 
                       try {
@@ -383,7 +416,9 @@ internal class SausageDocumentLoader(
                         }
                       });
                     });
-                  }, { once: true });
+                    },
+                    configurable: false,
+                  });
                 </script>
               </body>
             </html>
@@ -455,7 +490,7 @@ internal class SausageDocumentLoader(
                   $hint
                   <textarea id="$id"
                             class="sausage-text-area"
-                            data-storage-key="${control.key.escapeHtml()}"
+                            data-control-key="${control.key.escapeHtml()}"
                             placeholder="${control.placeholder.orEmpty().escapeHtml()}"
                             spellcheck="true"></textarea>
                   <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>

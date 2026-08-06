@@ -220,7 +220,7 @@
     </g>
 
     <text x="195" y="244" fill="#f7f1e7" font-size="27" font-weight="700" text-anchor="middle">A memory kept.</text>
-    <text x="195" y="275" fill="#9fb5cf" font-size="12" text-anchor="middle">Your note is still waiting on the previous screen.</text>
+    <text id="review-word-count" x="195" y="275" fill="#9fb5cf" font-size="12" text-anchor="middle">Hold this dream to see what you caught.</text>
     <path d="M70 308 H320" stroke="#dbeaff" stroke-width="1" opacity="0.12" />
   </g>
 
@@ -229,7 +229,17 @@
       window.captureDream = () => {
         const header = document.getElementById('dream-header');
         const confirmation = document.getElementById('dream-confirmation');
+        const review = document.getElementById('dream-review');
+        const reviewWordCount = document.getElementById('review-word-count');
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const note = window.sausage.controls.getValue('dream-note.body').trim();
+        const wordCount = note === '' ? 0 : note.split(/\s+/u).length;
+        const wordSummary = wordCount === 1
+          ? '1 word is waiting on the previous screen.'
+          : `${wordCount} words are waiting on the previous screen.`;
+
+        reviewWordCount.textContent = wordSummary;
+        review.setAttribute('aria-label', `Dream review, ${wordCount} words safely held`);
 
         header.scrollIntoView({
           behavior: reducedMotion ? 'auto' : 'smooth',

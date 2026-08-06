@@ -18,6 +18,8 @@ The sixth slice replaces the fixed flow shape with an ordered slice model. A scr
 
 The seventh slice adds multiple declarative screens. A button with `target-screen` changes the active screen with a restrained transition, while Sausage maintains scroll-aware screen history and gives that history first refusal on Android Back. Dream Note can now move from its scrolling note journey to a separate review screen and return without losing the saved text.
 
+The eighth slice adds the semantic `sausage.controls` API. Document scripts synchronously read and write existing standard-control values by declared key without depending on runtime-generated HTML. Dream Note reads its text area through `getValue`, counts the captured words and updates existing SVG content on the review screen.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

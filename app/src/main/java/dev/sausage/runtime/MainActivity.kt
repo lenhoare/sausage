@@ -519,10 +519,11 @@ class MainActivity : Activity() {
               document.documentElement.style.setProperty('-webkit-tap-highlight-color', 'transparent');
 
               const nativeStorage = window.${SausageStorageBridge.JAVASCRIPT_NAME};
-              const requireKey = (key) => {
+              const nativeControls = window.__sausageControls || null;
+              const requireKey = (key, kind) => {
                 const value = String(key);
                 if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}${'$'}/.test(value)) {
-                  throw new TypeError('Storage keys must contain only letters, numbers, dot, underscore or hyphen.');
+                  throw new TypeError(`${'$'}{kind} keys must contain only letters, numbers, dot, underscore or hyphen.`);
                 }
                 return value;
               };
@@ -530,7 +531,7 @@ class MainActivity : Activity() {
               const storage = Object.freeze({
                 get(key) {
                   return Promise.resolve().then(() => {
-                    const encoded = nativeStorage.get(requireKey(key));
+                    const encoded = nativeStorage.get(requireKey(key, 'Storage'));
                     return encoded == null ? null : JSON.parse(encoded);
                   });
                 },
@@ -540,7 +541,7 @@ class MainActivity : Activity() {
                     if (encoded === undefined) {
                       throw new TypeError('Storage values must be JSON-compatible.');
                     }
-                    if (!nativeStorage.set(requireKey(key), encoded)) {
+                    if (!nativeStorage.set(requireKey(key, 'Storage'), encoded)) {
                       throw new Error('Sausage could not store that value.');
                     }
                     return value;
@@ -548,19 +549,41 @@ class MainActivity : Activity() {
                 },
                 remove(key) {
                   return Promise.resolve().then(() => {
-                    if (!nativeStorage.remove(requireKey(key))) {
+                    if (!nativeStorage.remove(requireKey(key, 'Storage'))) {
                       throw new Error('Sausage could not remove that value.');
                     }
                   });
                 },
               });
 
+              const controls = Object.freeze({
+                getValue(key) {
+                  if (!nativeControls) {
+                    throw new Error('This document does not declare standard controls.');
+                  }
+                  return nativeControls.getValue(requireKey(key, 'Control'));
+                },
+                setValue(key, value) {
+                  if (!nativeControls) {
+                    throw new Error('This document does not declare standard controls.');
+                  }
+                  return nativeControls.setValue(requireKey(key, 'Control'), value);
+                },
+              });
+
               Object.defineProperty(window, 'sausage', {
-                value: Object.freeze({ storage }),
+                value: Object.freeze({ storage, controls }),
                 writable: false,
                 configurable: false,
               });
-              window.dispatchEvent(new Event('sausage-ready'));
+              const prepareDocument = window.__sausagePrepareDocument;
+              const announceReady = () => window.dispatchEvent(new Event('sausage-ready'));
+              Promise.resolve(
+                typeof prepareDocument === 'function' ? prepareDocument() : undefined
+              ).then(announceReady, (error) => {
+                console.error('Sausage could not prepare this document', error);
+                announceReady();
+              });
             })();
         """.trimIndent()
         private const val HANDLE_DOCUMENT_BACK_SCRIPT =

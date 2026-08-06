@@ -458,15 +458,18 @@ const position = await sausage.location.current({
 });
 ```
 
-### 9.4 Document-to-control state — PROPOSED
+### 9.4 Document-to-control state — INITIAL BASELINE PROVEN
 
 Control state MUST be readable and writable through the host API.
 
 Direct changes to declarative control properties MAY be observed by the runtime, but the simple host API is preferred for application code:
 
 ```javascript
+const name = sausage.controls.getValue("name");
 sausage.controls.setValue("name", "Len");
 ```
+
+The initial synchronous `getValue(key)` and `setValue(key, value)` API has been proven through Dream Note. It addresses controls by their declarative key and hides the runtime's generated HTML. An unknown or invalid key throws rather than silently selecting an unrelated element. `setValue` follows the control's ordinary change and persistence path.
 
 ### 9.5 Dynamic application structure — PROPOSED
 
