@@ -792,7 +792,7 @@ const unit = await sausage.storage.get("temperatureUnit");
 
 Supported values SHOULD include JSON-compatible data and binary blobs within quotas.
 
-### 16.2 Local database — DECIDED
+### 16.2 Local database — DECIDED / INITIAL BASELINE PROVEN
 
 Version 1 MUST include an isolated SQLite-backed database API.
 
@@ -815,7 +815,9 @@ const rows = await sausage.db.query(
 
 Each application receives a private database.
 
-### 16.3 Database interface — DECIDED
+The initial SQLite baseline is proven through Dream Note. `sausage.db.execute(sql, parameters)` creates and changes application-owned schema and data; `sausage.db.query(sql, parameters)` returns query rows as JavaScript objects. Both operations are promise-based and use the same provisional application scope as key-value storage.
+
+### 16.3 Database interface — DECIDED / INITIAL BASELINE PROVEN
 
 Version 1 exposes direct parameterised SQLite through `sausage.db`.
 
@@ -825,6 +827,10 @@ Version 1 exposes direct parameterised SQLite through `sausage.db`.
 - Multi-statement execution SHOULD be disabled by default.
 - The runtime SHOULD provide transaction helpers.
 - Schema migrations remain the application's responsibility.
+
+The initial bridge accepts one statement per call, without a trailing semicolon or SQL comments. `execute` currently supports `CREATE`, `ALTER`, `DROP`, `INSERT`, `REPLACE`, `UPDATE` and `DELETE`; `query` currently supports `SELECT`. Values MUST be supplied as a separate array containing only `null`, Booleans, finite JavaScript numbers and strings. Query results support null, numeric and text columns; binary values, explicit transactions and richer statement forms remain later slices. Results are currently bounded to 500 rows and 512 KB.
+
+`execute` resolves to an object containing `changes` and `lastInsertId`; `query` resolves to an array of row objects. Database integers outside JavaScript's safe integer range are rejected instead of silently losing precision.
 
 ### 16.4 Quotas — PROPOSED
 

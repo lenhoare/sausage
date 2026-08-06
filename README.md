@@ -28,6 +28,8 @@ The eleventh slice adds `app:switch`, the first Boolean standard control. Sausag
 
 The twelfth slice adds `app:slider`, the first numeric standard control. Its finite bounds, step and initial value are validated before rendering; the semantic API strictly reads, writes and reports JavaScript numbers. Dragging updates the displayed value and Dream Note artwork continuously, while persistence waits for the committed change at release.
 
+The thirteenth slice adds an application-isolated SQLite database through promise-based `sausage.db.execute(sql, parameters)` and `sausage.db.query(sql, parameters)`. Calls accept one parameterised statement at a time and return ordinary JavaScript objects and values without exposing Android database classes. Dream Note now creates its own journal table, stores a typed snapshot whenever a dream is held, queries the persisted entry count and displays that history on the review screen.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

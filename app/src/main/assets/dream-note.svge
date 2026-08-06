@@ -287,13 +287,34 @@
     </g>
 
     <text x="195" y="244" fill="#f7f1e7" font-size="27" font-weight="700" text-anchor="middle">A memory kept.</text>
-    <text id="review-word-count" x="195" y="267" fill="#9fb5cf" font-size="12" text-anchor="middle">Hold this dream to see what you caught.</text>
-    <text id="review-intensity" x="195" y="288" fill="#7893b2" font-size="11" font-weight="700" text-anchor="middle">Intensity awaits</text>
-    <path d="M70 311 H320" stroke="#dbeaff" stroke-width="1" opacity="0.12" />
+    <text id="review-word-count" x="195" y="263" fill="#9fb5cf" font-size="12" text-anchor="middle">Hold this dream to see what you caught.</text>
+    <text id="review-intensity" x="195" y="282" fill="#7893b2" font-size="11" font-weight="700" text-anchor="middle">Intensity awaits</text>
+    <text id="review-history" x="195" y="300" fill="#7893b2" font-size="10" font-weight="700" text-anchor="middle">Opening journal…</text>
+    <path d="M70 318 H320" stroke="#dbeaff" stroke-width="1" opacity="0.12" />
   </g>
 
   <script type="application/ecmascript"><![CDATA[
     (() => {
+      let journalReady = Promise.resolve();
+      let journalError = null;
+      let journalCount = 0;
+
+      const refreshJournalCount = async () => {
+        const rows = await window.sausage.db.query(
+          'SELECT COUNT(*) AS count FROM dream_entries WHERE id > ?',
+          [0]
+        );
+        if (rows.length !== 1 || !Number.isSafeInteger(rows[0].count)) {
+          throw new Error('Dream journal returned an invalid entry count.');
+        }
+        journalCount = rows[0].count;
+        const label = journalCount === 1
+          ? '1 dream held in this journal'
+          : `${journalCount} dreams held in this journal`;
+        document.getElementById('review-history').textContent = label;
+        return label;
+      };
+
       window.addEventListener('sausage-ready', () => {
         const header = document.getElementById('dream-header');
         const status = document.getElementById('vividness-status');
@@ -338,9 +359,27 @@
           intensity = value;
           updateHeaderState();
         });
+
+        journalReady = (async () => {
+          await window.sausage.db.execute(`
+            CREATE TABLE IF NOT EXISTS dream_entries (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              body TEXT NOT NULL,
+              vividness TEXT,
+              lucid INTEGER NOT NULL,
+              intensity REAL NOT NULL,
+              created_at INTEGER NOT NULL
+            )
+          `);
+          await refreshJournalCount();
+        })().catch((error) => {
+          journalError = error;
+          document.getElementById('review-history').textContent = 'Journal unavailable';
+          console.error('Could not open the dream journal database', error);
+        });
       }, { once: true });
 
-      window.captureDream = () => {
+      window.captureDream = async () => {
         const header = document.getElementById('dream-header');
         const confirmation = document.getElementById('dream-confirmation');
         const review = document.getElementById('dream-review');
@@ -357,11 +396,24 @@
         const lucidityLabel = lucid ? 'Lucid' : 'Not lucid';
         const reviewSummary = `${wordLabel} · ${vividnessLabel} · ${lucidityLabel}`;
 
+        await journalReady;
+        if (journalError) throw journalError;
+        const write = await window.sausage.db.execute(
+          `INSERT INTO dream_entries
+             (body, vividness, lucid, intensity, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+          [note, vividness, lucid, intensity, Date.now()]
+        );
+        if (write.changes !== 1 || !Number.isSafeInteger(write.lastInsertId)) {
+          throw new Error('Dream journal did not save exactly one entry.');
+        }
+        const journalLabel = await refreshJournalCount();
+
         reviewWordCount.textContent = reviewSummary;
         reviewIntensity.textContent = `Intensity ${intensity} of 10`;
         review.setAttribute(
           'aria-label',
-          `Dream review, ${wordLabel}, ${vividnessLabel.toLowerCase()}, ${lucidityLabel.toLowerCase()}, intensity ${intensity} of 10`
+          `Dream review, ${wordLabel}, ${vividnessLabel.toLowerCase()}, ${lucidityLabel.toLowerCase()}, intensity ${intensity} of 10, ${journalLabel}`
         );
 
         header.scrollIntoView({

@@ -30,6 +30,7 @@ import android.widget.TextView
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private var webView: WebView? = null
+    private var databaseBridge: SausageDatabaseBridge? = null
     private var screen = Screen.HOME
     private var keyboardInsetBottom = 0
 
@@ -303,6 +304,8 @@ class MainActivity : Activity() {
         clearScreen()
         screen = Screen.DOCUMENT
         val loader = SausageDocumentLoader(document)
+        val documentDatabase = SausageDatabaseBridge(this, document.storageScope)
+        databaseBridge = documentDatabase
 
         val view = WebView(this).apply {
             contentDescription = getString(R.string.document_accessibility, document.displayName)
@@ -329,6 +332,10 @@ class MainActivity : Activity() {
             addJavascriptInterface(
                 SausageStorageBridge(context, document.storageScope),
                 SausageStorageBridge.JAVASCRIPT_NAME,
+            )
+            addJavascriptInterface(
+                documentDatabase,
+                SausageDatabaseBridge.JAVASCRIPT_NAME,
             )
 
             webViewClient = object : WebViewClient() {
@@ -469,8 +476,11 @@ class MainActivity : Activity() {
             root.removeView(view)
             view.stopLoading()
             view.removeJavascriptInterface(SausageStorageBridge.JAVASCRIPT_NAME)
+            view.removeJavascriptInterface(SausageDatabaseBridge.JAVASCRIPT_NAME)
             view.destroy()
         }
+        databaseBridge?.close()
+        databaseBridge = null
         root.removeAllViews()
     }
 
@@ -519,6 +529,7 @@ class MainActivity : Activity() {
               document.documentElement.style.setProperty('-webkit-tap-highlight-color', 'transparent');
 
               const nativeStorage = window.${SausageStorageBridge.JAVASCRIPT_NAME};
+              const nativeDatabase = window.${SausageDatabaseBridge.JAVASCRIPT_NAME};
               const nativeControls = window.__sausageControls || null;
               const requireKey = (key, kind) => {
                 const value = String(key);
@@ -580,8 +591,58 @@ class MainActivity : Activity() {
                 },
               });
 
+              const databaseParameters = (parameters) => {
+                if (!Array.isArray(parameters)) {
+                  throw new TypeError('Database parameters must be an array.');
+                }
+                return parameters.map((value, index) => {
+                  if (
+                    value === null ||
+                    typeof value === 'string' ||
+                    typeof value === 'boolean'
+                  ) {
+                    return value;
+                  }
+                  if (typeof value === 'number' && Number.isFinite(value)) {
+                    if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+                      throw new RangeError(
+                        `Database parameter ${'$'}{index + 1} is outside JavaScript's safe integer range.`
+                      );
+                    }
+                    return value;
+                  }
+                  throw new TypeError(
+                    `Database parameter ${'$'}{index + 1} must be null, Boolean, a finite number or a string.`
+                  );
+                });
+              };
+              const runDatabaseCall = (method, sql, parameters) => Promise.resolve().then(() => {
+                if (typeof sql !== 'string' || sql.trim() === '') {
+                  throw new TypeError('Database SQL must be a non-empty string.');
+                }
+                const encodedParameters = JSON.stringify(databaseParameters(parameters));
+                const encodedResult = nativeDatabase[method](sql, encodedParameters);
+                const result = JSON.parse(encodedResult);
+                if (!result || result.ok !== true) {
+                  throw new Error(
+                    result && typeof result.error === 'string'
+                      ? result.error
+                      : 'The database operation failed.'
+                  );
+                }
+                return result.value;
+              });
+              const db = Object.freeze({
+                execute(sql, parameters = []) {
+                  return runDatabaseCall('execute', sql, parameters);
+                },
+                query(sql, parameters = []) {
+                  return runDatabaseCall('query', sql, parameters);
+                },
+              });
+
               Object.defineProperty(window, 'sausage', {
-                value: Object.freeze({ storage, controls }),
+                value: Object.freeze({ storage, controls, db }),
                 writable: false,
                 configurable: false,
               });
