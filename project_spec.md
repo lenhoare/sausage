@@ -352,7 +352,8 @@ The v1 vocabulary SHOULD remain small, stable and comparable in breadth to a cla
 | Date input/picker | `app:date` | PROPOSED |
 | Time input/picker | `app:time` | PROPOSED |
 | Progress indicator | `app:progress` | PROPOSED |
-| File selection | host-mediated action | PROPOSED |
+| Photo selection | `app:photo` | INITIAL BASELINE PROVEN |
+| General file selection | host-mediated action | PROPOSED |
 
 New controls SHOULD be added only when a reference application demonstrates a recurring need.
 
@@ -361,6 +362,8 @@ The initial `app:choice` declaration uses a short comma-separated `options` attr
 The initial `app:switch` declaration requires only a `key` and `label`. Sausage renders a real browser checkbox with switch accessibility semantics and owns the polished track presentation around it. Its semantic value is always Boolean: a new switch defaults to `false`, stored `false` is restored as a real value, and `setValue()` rejects non-Boolean values rather than coercing them.
 
 The initial `app:slider` declaration requires `key`, `label`, `min`, `max`, `step` and `value`. All numeric attributes must be finite, `min` must be less than `max`, and both the range and initial value must align to the positive step. Sausage renders a real browser range input with an accessible label, current-value output and bounds. Its semantic value is a JavaScript number. Live input emits `onChange()` continuously, while automatic persistence occurs on the committed change when dragging finishes.
+
+The initial `app:photo` declaration requires a `key`, `label` and `target`, where `target` names an existing SVG `<image>` element. Sausage uses Android's system chooser for a single image, supplies the selected content to that image through a temporary runtime-owned blob URL and exposes only `{ name, type, size }` metadata through the semantic control API. The value is `null` before selection. Scripts may observe it with `sausage.controls.onChange`; they cannot programmatically choose a file, although `setValue(key, null)` may clear it. Photo values are deliberately session-only in this baseline and are not copied into key-value storage or SQLite automatically.
 
 ### 8.3 Common properties — PROPOSED
 
@@ -426,7 +429,7 @@ An event attribute names a global function or a runtime-resolvable handler.
 
 Inline JavaScript expressions in event attributes SHOULD be discouraged.
 
-### 9.3 Host API — PROPOSED
+### 9.3 Host API — PARTIAL BASELINE PROVEN
 
 The runtime exposes a single global object:
 
@@ -463,6 +466,10 @@ const position = await sausage.location.current({
   accuracy: "balanced"
 });
 ```
+
+The initial location baseline implements a single foreground request with `balanced` or `precise` accuracy preference. It returns `{ latitude, longitude, accuracy, timestamp, cached }`, stops listening after one result, and fails after a bounded timeout when neither a current nor cached position is available. Continuous and background location remain deferred.
+
+The initial notification baseline implements `sausage.notifications.show({ title, body })`, `schedule({ id, title, body, at })` and `cancel(id)`. `at` is a JavaScript epoch-millisecond timestamp or `Date`. Scheduled reminders use Android's inexact alarm facility: they never fire before the requested time but may be delayed by battery management. They survive document and process closure, but reboot restoration and repeating notifications remain deferred.
 
 ### 9.4 Document-to-control state — INITIAL BASELINE PROVEN
 
@@ -617,7 +624,7 @@ Applications MUST use persistent storage for state that must survive process ter
 
 ## 12. Manifest
 
-### 12.1 Location — PROPOSED
+### 12.1 Location — INITIAL CAPABILITY DECLARATION PROVEN
 
 The manifest is embedded in SVG metadata:
 
@@ -665,6 +672,8 @@ The manifest ID alone MUST NOT ultimately be treated as proof of identity becaus
 
 During the initial single-user development stage, the runtime MAY use a simpler provisional mapping while keeping this distinction in its internal design.
 
+The initial device-capability baseline parses direct `app:permission` children of the manifest and requires matching `location` or `notifications` declarations before exposing those native operations. The human-readable `reason` is validated and retained in the document source; a dedicated preflight permission screen remains later work.
+
 ---
 
 ## 13. Permissions and capabilities
@@ -686,13 +695,13 @@ The runtime requests Android permission at first use, or during an explicit appl
 | Capability | v1 scope |
 |---|---|
 | Camera | Still-image capture |
-| Photo picker | Select one or more images |
+| Photo picker | Select one image — INITIAL BASELINE PROVEN |
 | Microphone | Record a bounded audio clip |
-| Location | Current position and optional updates |
+| Location | One foreground current position — INITIAL BASELINE PROVEN |
 | Haptics | Simple vibration patterns |
 | Clipboard | Read/write with platform restrictions |
 | Share | Android share sheet |
-| Notifications | Local notifications |
+| Notifications | Immediate and one-off scheduled local notifications — INITIAL BASELINE PROVEN |
 | Files | User-selected open/save only |
 | Network | HTTPS to declared origins |
 | Device info | Safe, non-identifying properties |
@@ -704,6 +713,8 @@ The runtime requests Android permission at first use, or during an explicit appl
 | Arbitrary shell/process access | FORBIDDEN |
 
 ### 13.4 Permission UX — PROPOSED
+
+The initial bundled-photo baseline delegates selection to Android's system document UI and therefore does not request broad storage access. It accepts one image, rejects content over 15 MB and releases the temporary renderer URL when the document closes or the choice changes. Capability declarations, approval history, managed media persistence and multiple selection remain later work.
 
 Before first launch, the viewer SHOULD present:
 
@@ -1130,9 +1141,9 @@ These slices are an implementation sequence, not separate profile versions. Toge
 
 - Camera still capture.
 - Photo picker.
-- Current location.
+- Current location — initial foreground baseline proven.
 - Clipboard, share and haptics.
-- Local notifications.
+- Local notifications — initial immediate/scheduled baseline proven.
 
 ### Slice 7 — Distribution polish
 

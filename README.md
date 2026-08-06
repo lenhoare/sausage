@@ -32,6 +32,10 @@ The thirteenth slice adds an application-isolated SQLite database through promis
 
 The fourteenth slice proves navigation between separate Sausage documents. Dream Note opens a sibling [`dream-journal.svge`](app/src/main/assets/dream-journal.svge) through `sausage.navigation.open(path)`; Sausage validates the relative path and matching manifest application ID, gives the journal a fresh SVG DOM and JavaScript context, and places the previous document on a native back stack. The journal queries the same private SQLite database and fills three existing graphical memory cards. `sausage.navigation.back()` and Android Back return to the previous document.
 
+The fifteenth slice adds the first device capability through the semantic `app:photo` control. Sausage opens Android's system image chooser, keeps the selected file private to the current renderer session, places it into a declared SVG `<image>` target through a temporary blob URL and reports safe file metadata through `sausage.controls.onChange`. The bundled [`dream-token.svge`](app/src/main/assets/dream-token.svge) demonstrates the result with a restrained SVG photo reveal. Cancellation leaves the page unchanged, non-images and files over 15 MB are rejected, and no broad storage permission is requested.
+
+The sixteenth slice adds two explicitly declared host capabilities. `sausage.location.current({ accuracy })` requests one foreground position, returns coordinates, metre accuracy, timestamp and whether a cached fallback was used, then detaches its Android listener. `sausage.notifications.show(options)`, `schedule(options)` and `cancel(id)` provide immediate and one-off local reminders through an application-scoped Android notification channel. Scheduled reminders use battery-conscious inexact alarms, survive the renderer closing but not a device reboot, and may be delivered later than their requested time. [`night-beacon.svge`](app/src/main/assets/night-beacon.svge) exercises both APIs, with Android runtime permission prompts occurring only at first use.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

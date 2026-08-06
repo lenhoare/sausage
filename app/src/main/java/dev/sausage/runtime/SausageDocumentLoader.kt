@@ -30,7 +30,7 @@ internal class SausageDocumentLoader(
             "OK",
             mapOf(
                 "Cache-Control" to "no-store",
-                "Content-Security-Policy" to "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+                "Content-Security-Policy" to "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src blob:",
             ),
             ByteArrayInputStream(response.content),
         )
@@ -333,6 +333,57 @@ internal class SausageDocumentLoader(
                     font-weight: 650;
                     font-variant-numeric: tabular-nums;
                   }
+                  .sausage-photo-heading {
+                    margin: 0 0 9px;
+                    color: #f5dfbb;
+                    font-size: 17px;
+                    font-weight: 700;
+                    letter-spacing: .01em;
+                  }
+                  .sausage-photo-input {
+                    position: absolute;
+                    width: 1px;
+                    height: 1px;
+                    margin: -1px;
+                    overflow: hidden;
+                    opacity: 0;
+                    pointer-events: none;
+                  }
+                  .sausage-photo-button {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 100%;
+                    min-height: 58px;
+                    padding: 13px 20px;
+                    border: 1px solid rgba(239, 170, 101, .62);
+                    border-radius: 18px;
+                    background: rgba(239, 170, 101, .1);
+                    color: #fff4dc;
+                    font-size: 15px;
+                    font-weight: 800;
+                    letter-spacing: .035em;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: transform 120ms ease, background 180ms ease, border-color 180ms ease;
+                  }
+                  .sausage-photo-button:active { transform: scale(.985); }
+                  .sausage-photo-input:focus-visible + .sausage-photo-button {
+                    outline: 3px solid rgba(239, 170, 101, .28);
+                    outline-offset: 3px;
+                  }
+                  .sausage-photo-control.has-photo .sausage-photo-button {
+                    border-color: rgba(184, 207, 233, .3);
+                    background: rgba(255, 255, 255, .05);
+                  }
+                  .sausage-photo-status {
+                    min-height: 18px;
+                    margin: 12px 2px 0;
+                    color: #8fa7c2;
+                    font-size: 12px;
+                    font-weight: 600;
+                    letter-spacing: .04em;
+                  }
                   .sausage-save-status {
                     min-height: 18px;
                     margin: 13px 2px 0;
@@ -604,6 +655,81 @@ internal class SausageDocumentLoader(
                       }));
                     });
 
+                    document.querySelectorAll('.sausage-photo-input[data-control-key]').forEach((input) => {
+                      const control = input.closest('.sausage-photo-control');
+                      const status = control.querySelector('.sausage-photo-status');
+                      const buttonLabel = control.querySelector('.sausage-photo-button');
+                      const target = document.getElementById(input.dataset.photoTarget);
+                      const initialHref = target.getAttribute('href');
+                      let objectUrl = null;
+                      let selectedValue = null;
+
+                      const clearSelection = (notify) => {
+                        if (objectUrl) URL.revokeObjectURL(objectUrl);
+                        objectUrl = null;
+                        selectedValue = null;
+                        input.value = '';
+                        if (initialHref == null) {
+                          target.removeAttribute('href');
+                        } else {
+                          target.setAttribute('href', initialHref);
+                        }
+                        control.classList.remove('has-photo');
+                        buttonLabel.textContent = 'Choose a photo';
+                        status.textContent = 'Used only while this document is open';
+                        if (notify) {
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                          input.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        return null;
+                      };
+
+                      input.addEventListener('change', () => {
+                        const file = input.files && input.files[0];
+                        if (!file) return;
+                        if (file.type && !file.type.startsWith('image/')) {
+                          clearSelection(false);
+                          status.textContent = 'That file is not a recognised image';
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                          return;
+                        }
+                        if (file.size > 15 * 1024 * 1024) {
+                          clearSelection(false);
+                          status.textContent = 'Please choose an image smaller than 15 MB';
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                          return;
+                        }
+
+                        if (objectUrl) URL.revokeObjectURL(objectUrl);
+                        objectUrl = URL.createObjectURL(file);
+                        target.setAttribute('href', objectUrl);
+                        selectedValue = Object.freeze({
+                          name: file.name || 'Selected photo',
+                          type: file.type || null,
+                          size: file.size,
+                        });
+                        control.classList.add('has-photo');
+                        buttonLabel.textContent = 'Choose another photo';
+                        status.textContent = selectedValue.name;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                      });
+
+                      controlAdapters.set(input.dataset.controlKey, Object.freeze({
+                        root: input,
+                        getValue: () => selectedValue,
+                        restore: () => null,
+                        setValue: (value) => {
+                          if (value !== null) {
+                            throw new TypeError('Photo controls can only be cleared programmatically.');
+                          }
+                          return clearSelection(true);
+                        },
+                      }));
+                      window.addEventListener('pagehide', () => {
+                        if (objectUrl) URL.revokeObjectURL(objectUrl);
+                      }, { once: true });
+                    });
+
                     const requireControl = (key) => {
                       const control = controlAdapters.get(String(key));
                       if (!control) {
@@ -783,6 +909,7 @@ internal class SausageDocumentLoader(
                           return;
                         }
                         actionButton.classList.remove('completed');
+                        actionButton.disabled = true;
                         actionButton.setAttribute('aria-busy', 'true');
                         actionStatus.textContent = 'Running…';
 
@@ -795,9 +922,13 @@ internal class SausageDocumentLoader(
                           actionStatus.textContent = typeof result === 'string' ? result : 'Done';
                           actionButton.classList.add('completed');
                         } catch (error) {
-                          actionStatus.textContent = 'This action could not run';
+                          actionStatus.textContent =
+                            error instanceof Error && error.message
+                              ? error.message
+                              : 'This action could not run';
                           console.error('Could not run Sausage button action', error);
                         } finally {
+                          actionButton.disabled = false;
                           actionButton.removeAttribute('aria-busy');
                         }
                       });
@@ -855,6 +986,7 @@ internal class SausageDocumentLoader(
                 is SausageChoice,
                 is SausageSwitch,
                 is SausageSlider,
+                is SausagePhoto,
                 is SausageButton,
                 -> pendingControls += index to slice
             }
@@ -960,6 +1092,31 @@ internal class SausageDocumentLoader(
                     <span>$max</span>
                   </div>
                   <p class="sausage-save-status" aria-live="polite">Saved automatically on this device</p>
+                </div>
+            """.trimIndent()
+        }
+
+        is SausagePhoto -> {
+            val id = "sausage-photo-$screenId-$index"
+            val headingId = "$id-heading"
+            val statusId = "$id-status"
+            val hint = control.hint?.let {
+                "<p class=\"sausage-hint\">${it.escapeHtml()}</p>"
+            }.orEmpty()
+            """
+                <div class="sausage-control sausage-photo-control">
+                  <p id="$headingId" class="sausage-photo-heading">${control.label.escapeHtml()}</p>
+                  $hint
+                  <input id="$id"
+                         class="sausage-photo-input"
+                         type="file"
+                         accept="image/*"
+                         data-control-key="${control.key.escapeHtml()}"
+                         data-photo-target="${control.target.escapeHtml()}"
+                         aria-labelledby="$headingId"
+                         aria-describedby="$statusId">
+                  <label class="sausage-photo-button" for="$id">Choose a photo</label>
+                  <p id="$statusId" class="sausage-photo-status" aria-live="polite">Used only while this document is open</p>
                 </div>
             """.trimIndent()
         }

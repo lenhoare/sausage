@@ -1,19 +1,29 @@
 package dev.sausage.runtime
 
 import android.annotation.SuppressLint
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -26,14 +36,22 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import org.json.JSONObject
 import java.util.ArrayDeque
 
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private var webView: WebView? = null
     private var databaseBridge: SausageDatabaseBridge? = null
+    private var photoFileCallback: ValueCallback<Array<Uri>>? = null
     private var currentDocument: SausageDocument? = null
     private val documentBackStack = ArrayDeque<SausageDocument>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingLocationRequest: PendingLocationRequest? = null
+    private var activeLocationListener: LocationListener? = null
+    private var locationFallback: Location? = null
+    private val pendingNotificationActions = ArrayDeque<PendingNotificationAction>()
+    private var notificationPermissionRequestActive = false
     private var screen = Screen.HOME
     private var keyboardInsetBottom = 0
 
@@ -202,6 +220,30 @@ class MainActivity : Activity() {
             ),
         )
         content.addView(
+            actionButton(
+                label = getString(R.string.open_photo_sample),
+                primary = false,
+                onClick = ::openPhotoSample,
+            ),
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = dp(58),
+                topMargin = dp(14),
+            ),
+        )
+        content.addView(
+            actionButton(
+                label = getString(R.string.open_device_sample),
+                primary = false,
+                onClick = ::openDeviceSample,
+            ),
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = dp(58),
+                topMargin = dp(14),
+            ),
+        )
+        content.addView(
             TextView(this).apply {
                 text = getString(R.string.home_footer)
                 setTextColor(SUBTLE_TEXT)
@@ -254,6 +296,14 @@ class MainActivity : Activity() {
         data: Intent?,
     ) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == OPEN_PHOTO_REQUEST) {
+            val callback = photoFileCallback
+            photoFileCallback = null
+            callback?.onReceiveValue(
+                WebChromeClient.FileChooserParams.parseResult(resultCode, data),
+            )
+            return
+        }
         if (requestCode != OPEN_DOCUMENT_REQUEST || resultCode != RESULT_OK) return
 
         val uri = data?.data ?: run {
@@ -292,6 +342,14 @@ class MainActivity : Activity() {
         openBundledDocument(INPUT_DOCUMENT)
     }
 
+    private fun openPhotoSample() {
+        openBundledDocument(PHOTO_DOCUMENT)
+    }
+
+    private fun openDeviceSample() {
+        openBundledDocument(DEVICE_DOCUMENT)
+    }
+
     private fun openBundledDocument(assetName: String) {
         try {
             val document = SausageDocumentReader.fromAsset(assets, assetName)
@@ -315,6 +373,10 @@ class MainActivity : Activity() {
         screen = Screen.DOCUMENT
         currentDocument = document
         val loader = SausageDocumentLoader(document)
+        val allowsPhotoSelection = document.flow
+            ?.screens
+            ?.flatMap(SausageScreen::slices)
+            ?.any { it is SausagePhoto } == true
         val documentDatabase = SausageDatabaseBridge(this, document.storageScope)
         databaseBridge = documentDatabase
         val documentNavigation = SausageNavigationBridge(
@@ -333,6 +395,40 @@ class MainActivity : Activity() {
                     if (screen == Screen.DOCUMENT && currentDocument === document) {
                         navigateDocumentBack()
                     }
+                }
+            },
+        )
+        val documentDevice = SausageDeviceBridge(
+            capabilities = document.capabilities,
+            requestLocation = { requestId, precise ->
+                runOnUiThread { requestCurrentLocation(document, requestId, precise) }
+            },
+            onShowNotification = { requestId, title, body ->
+                runOnUiThread {
+                    requestNotification(
+                        PendingNotificationAction.Show(document, requestId, title, body),
+                    )
+                }
+            },
+            onScheduleNotification = { requestId, notificationId, title, body, atMillis ->
+                runOnUiThread {
+                    requestNotification(
+                        PendingNotificationAction.Schedule(
+                            document,
+                            requestId,
+                            notificationId,
+                            title,
+                            body,
+                            atMillis,
+                        ),
+                    )
+                }
+            },
+            onCancelNotification = { requestId, notificationId ->
+                runOnUiThread {
+                    requestNotification(
+                        PendingNotificationAction.Cancel(document, requestId, notificationId),
+                    )
                 }
             },
         )
@@ -371,6 +467,39 @@ class MainActivity : Activity() {
                 documentNavigation,
                 SausageNavigationBridge.JAVASCRIPT_NAME,
             )
+            addJavascriptInterface(
+                documentDevice,
+                SausageDeviceBridge.JAVASCRIPT_NAME,
+            )
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                    webView: WebView,
+                    filePathCallback: ValueCallback<Array<Uri>>,
+                    fileChooserParams: FileChooserParams,
+                ): Boolean {
+                    if (!allowsPhotoSelection) {
+                        filePathCallback.onReceiveValue(null)
+                        return false
+                    }
+                    photoFileCallback?.onReceiveValue(null)
+                    photoFileCallback = filePathCallback
+
+                    val intent = fileChooserParams.createIntent().apply {
+                        type = "image/*"
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+                    }
+                    return try {
+                        startActivityForResult(intent, OPEN_PHOTO_REQUEST)
+                        true
+                    } catch (error: Exception) {
+                        photoFileCallback = null
+                        filePathCallback.onReceiveValue(null)
+                        Log.e(TAG, "Unable to open photo picker", error)
+                        false
+                    }
+                }
+            }
 
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(
@@ -424,6 +553,268 @@ class MainActivity : Activity() {
         )
         root.requestApplyInsets()
         view.loadUrl(SausageDocumentLoader.DOCUMENT_URL)
+    }
+
+    private fun requestCurrentLocation(
+        document: SausageDocument,
+        requestId: String,
+        precise: Boolean,
+    ) {
+        if (screen != Screen.DOCUMENT || currentDocument !== document) return
+        if (pendingLocationRequest != null) {
+            completeHostRequest(document, requestId, error = "A location request is already in progress.")
+            return
+        }
+
+        val request = PendingLocationRequest(document, requestId, precise)
+        pendingLocationRequest = request
+        if (hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)) {
+            startCurrentLocation(request)
+            return
+        }
+
+        val permissions = if (precise) {
+            arrayOf(
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            )
+        } else {
+            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+        requestPermissions(permissions, LOCATION_PERMISSION_REQUEST)
+    }
+
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun startCurrentLocation(request: PendingLocationRequest) {
+        if (pendingLocationRequest !== request) return
+        val manager = getSystemService(LocationManager::class.java)
+        val preciseGranted = request.precise && hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+        val preferredProviders = if (preciseGranted) {
+            listOf(LocationManager.GPS_PROVIDER, FUSED_LOCATION_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        } else {
+            listOf(FUSED_LOCATION_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+        }
+        val provider = preferredProviders.firstOrNull { candidate ->
+            manager.allProviders.contains(candidate) && manager.isProviderEnabled(candidate)
+        }
+        if (provider == null) {
+            finishLocationRequest(error = "Location is turned off or unavailable on this device.")
+            return
+        }
+
+        locationFallback = manager.getProviders(true)
+            .mapNotNull { candidate ->
+                try {
+                    manager.getLastKnownLocation(candidate)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            .maxByOrNull(Location::getTime)
+
+        val requestedProvider = provider
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                finishLocationRequest(location = location, cached = false)
+            }
+
+            override fun onProviderDisabled(provider: String) {
+                if (provider == requestedProvider) {
+                    finishLocationRequest(
+                        location = locationFallback,
+                        cached = locationFallback != null,
+                        error = "The selected location provider was turned off.",
+                    )
+                }
+            }
+        }
+        activeLocationListener = listener
+        try {
+            manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+        } catch (error: Exception) {
+            Log.w(TAG, "Could not request a current location", error)
+            finishLocationRequest(error = "Android could not start a location request.")
+            return
+        }
+
+        mainHandler.postDelayed({
+            if (pendingLocationRequest === request) {
+                finishLocationRequest(
+                    location = locationFallback,
+                    cached = locationFallback != null,
+                    error = "A current location was not available in time.",
+                )
+            }
+        }, LOCATION_TIMEOUT_MILLIS)
+    }
+
+    private fun finishLocationRequest(
+        location: Location? = null,
+        cached: Boolean = false,
+        error: String? = null,
+    ) {
+        val request = pendingLocationRequest ?: return
+        pendingLocationRequest = null
+        activeLocationListener?.let { listener ->
+            try {
+                getSystemService(LocationManager::class.java).removeUpdates(listener)
+            } catch (_: Exception) {
+                // The listener is already detached or permission changed during the request.
+            }
+        }
+        activeLocationListener = null
+        locationFallback = null
+
+        if (location == null) {
+            completeHostRequest(request.document, request.requestId, error = error ?: "Location is unavailable.")
+            return
+        }
+        completeHostRequest(
+            request.document,
+            request.requestId,
+            value = JSONObject()
+                .put("latitude", location.latitude)
+                .put("longitude", location.longitude)
+                .put("accuracy", location.accuracy.toDouble())
+                .put("timestamp", location.time)
+                .put("cached", cached),
+        )
+    }
+
+    private fun requestNotification(action: PendingNotificationAction) {
+        if (screen != Screen.DOCUMENT || currentDocument !== action.document) return
+        if (action is PendingNotificationAction.Cancel) {
+            performNotificationAction(action)
+            return
+        }
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            performNotificationAction(action)
+            return
+        }
+
+        pendingNotificationActions.addLast(action)
+        if (!notificationPermissionRequestActive) {
+            notificationPermissionRequestActive = true
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                NOTIFICATION_PERMISSION_REQUEST,
+            )
+        }
+    }
+
+    private fun performNotificationAction(action: PendingNotificationAction) {
+        if (screen != Screen.DOCUMENT || currentDocument !== action.document) return
+        val applicationName = action.document.displayName.removeSuffix(".svge")
+        try {
+            val result = when (action) {
+                is PendingNotificationAction.Show -> {
+                    SausageNotifications.show(
+                        this,
+                        SausageNotificationSpec(
+                            action.document.storageScope,
+                            applicationName,
+                            action.requestId,
+                            action.title,
+                            action.body,
+                        ),
+                    )
+                    JSONObject().put("shown", true)
+                }
+
+                is PendingNotificationAction.Schedule -> {
+                    SausageNotifications.schedule(
+                        this,
+                        SausageNotificationSpec(
+                            action.document.storageScope,
+                            applicationName,
+                            action.notificationId,
+                            action.title,
+                            action.body,
+                        ),
+                        action.atMillis,
+                    )
+                    JSONObject()
+                        .put("id", action.notificationId)
+                        .put("scheduledAt", action.atMillis)
+                }
+
+                is PendingNotificationAction.Cancel -> {
+                    SausageNotifications.cancel(
+                        this,
+                        action.document.storageScope,
+                        action.notificationId,
+                    )
+                    JSONObject().put("cancelled", true)
+                }
+            }
+            completeHostRequest(action.document, action.requestId, value = result)
+        } catch (error: Exception) {
+            Log.w(TAG, "Device notification operation failed", error)
+            completeHostRequest(
+                action.document,
+                action.requestId,
+                error = error.message ?: "The notification operation failed.",
+            )
+        }
+    }
+
+    private fun completeHostRequest(
+        document: SausageDocument,
+        requestId: String,
+        value: Any? = null,
+        error: String? = null,
+    ) {
+        if (screen != Screen.DOCUMENT || currentDocument !== document) return
+        val view = webView ?: return
+        val result = JSONObject().apply {
+            put("ok", error == null)
+            if (error == null) put("value", value ?: JSONObject.NULL)
+            else put("error", error.take(300))
+        }.toString()
+        view.evaluateJavascript(
+            "window.__sausageCompleteHostRequest(${JSONObject.quote(requestId)}, ${JSONObject.quote(result)})",
+            null,
+        )
+    }
+
+    private fun hasPermission(permission: String): Boolean =
+        checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            LOCATION_PERMISSION_REQUEST -> {
+                val request = pendingLocationRequest ?: return
+                if (hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)) {
+                    startCurrentLocation(request)
+                } else {
+                    finishLocationRequest(error = "Location permission was not granted.")
+                }
+            }
+
+            NOTIFICATION_PERMISSION_REQUEST -> {
+                notificationPermissionRequestActive = false
+                val allowed = hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+                val actions = pendingNotificationActions.toList()
+                pendingNotificationActions.clear()
+                actions.forEach { action ->
+                    if (allowed) performNotificationAction(action)
+                    else completeHostRequest(
+                        action.document,
+                        action.requestId,
+                        error = "Notification permission was not granted.",
+                    )
+                }
+            }
+        }
     }
 
     private fun showError(message: String) {
@@ -506,6 +897,24 @@ class MainActivity : Activity() {
     }
 
     private fun clearScreen() {
+        val departingDocument = currentDocument
+        if (pendingLocationRequest?.document === departingDocument) {
+            activeLocationListener?.let { listener ->
+                try {
+                    getSystemService(LocationManager::class.java).removeUpdates(listener)
+                } catch (_: Exception) {
+                    // The listener is already detached or permission changed.
+                }
+            }
+            pendingLocationRequest = null
+            activeLocationListener = null
+            locationFallback = null
+        }
+        if (departingDocument != null) {
+            pendingNotificationActions.removeIf { it.document === departingDocument }
+        }
+        photoFileCallback?.onReceiveValue(null)
+        photoFileCallback = null
         webView?.let { view ->
             webView = null
             root.removeView(view)
@@ -513,6 +922,7 @@ class MainActivity : Activity() {
             view.removeJavascriptInterface(SausageStorageBridge.JAVASCRIPT_NAME)
             view.removeJavascriptInterface(SausageDatabaseBridge.JAVASCRIPT_NAME)
             view.removeJavascriptInterface(SausageNavigationBridge.JAVASCRIPT_NAME)
+            view.removeJavascriptInterface(SausageDeviceBridge.JAVASCRIPT_NAME)
             view.destroy()
         }
         databaseBridge?.close()
@@ -568,6 +978,39 @@ class MainActivity : Activity() {
         ERROR,
     }
 
+    private data class PendingLocationRequest(
+        val document: SausageDocument,
+        val requestId: String,
+        val precise: Boolean,
+    )
+
+    private sealed interface PendingNotificationAction {
+        val document: SausageDocument
+        val requestId: String
+
+        data class Show(
+            override val document: SausageDocument,
+            override val requestId: String,
+            val title: String,
+            val body: String,
+        ) : PendingNotificationAction
+
+        data class Schedule(
+            override val document: SausageDocument,
+            override val requestId: String,
+            val notificationId: String,
+            val title: String,
+            val body: String,
+            val atMillis: Long,
+        ) : PendingNotificationAction
+
+        data class Cancel(
+            override val document: SausageDocument,
+            override val requestId: String,
+            val notificationId: String,
+        ) : PendingNotificationAction
+    }
+
     companion object {
         private val APPLY_RUNTIME_SCRIPT = """
             (() => {
@@ -576,6 +1019,7 @@ class MainActivity : Activity() {
               const nativeStorage = window.${SausageStorageBridge.JAVASCRIPT_NAME};
               const nativeDatabase = window.${SausageDatabaseBridge.JAVASCRIPT_NAME};
               const nativeNavigation = window.${SausageNavigationBridge.JAVASCRIPT_NAME};
+              const nativeDevice = window.${SausageDeviceBridge.JAVASCRIPT_NAME};
               const nativeControls = window.__sausageControls || null;
               const requireKey = (key, kind) => {
                 const value = String(key);
@@ -712,8 +1156,124 @@ class MainActivity : Activity() {
                 },
               });
 
+              let nextHostRequestId = 1;
+              const pendingHostRequests = new Map();
+              const completeHostRequest = (requestId, encodedResult) => {
+                const pending = pendingHostRequests.get(String(requestId));
+                if (!pending) return false;
+                pendingHostRequests.delete(String(requestId));
+                try {
+                  const result = JSON.parse(encodedResult);
+                  if (!result || result.ok !== true) {
+                    pending.reject(new Error(
+                      result && typeof result.error === 'string'
+                        ? result.error
+                        : 'The device operation failed.'
+                    ));
+                  } else {
+                    pending.resolve(result.value);
+                  }
+                } catch (error) {
+                  pending.reject(error);
+                }
+                return true;
+              };
+              Object.defineProperty(window, '__sausageCompleteHostRequest', {
+                value: completeHostRequest,
+                configurable: false,
+              });
+              const hostRequest = (invoke) => new Promise((resolve, reject) => {
+                if (nextHostRequestId > Number.MAX_SAFE_INTEGER) {
+                  reject(new Error('The device request counter is exhausted.'));
+                  return;
+                }
+                const requestId = `host-${'$'}{nextHostRequestId++}`;
+                pendingHostRequests.set(requestId, { resolve, reject });
+                try {
+                  const acknowledgement = JSON.parse(invoke(requestId));
+                  if (!acknowledgement || acknowledgement.ok !== true) {
+                    pendingHostRequests.delete(requestId);
+                    reject(new Error(
+                      acknowledgement && typeof acknowledgement.error === 'string'
+                        ? acknowledgement.error
+                        : 'The device operation was rejected.'
+                    ));
+                  }
+                } catch (error) {
+                  pendingHostRequests.delete(requestId);
+                  reject(error);
+                }
+              });
+
+              const location = Object.freeze({
+                current(options = {}) {
+                  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+                    return Promise.reject(new TypeError('Location options must be an object.'));
+                  }
+                  const accuracy = options.accuracy == null ? 'balanced' : options.accuracy;
+                  if (accuracy !== 'balanced' && accuracy !== 'precise') {
+                    return Promise.reject(
+                      new RangeError('Location accuracy must be balanced or precise.')
+                    );
+                  }
+                  return hostRequest((requestId) =>
+                    nativeDevice.currentLocation(requestId, accuracy === 'precise')
+                  );
+                },
+              });
+
+              const requireNotificationText = (value, name, maxLength, allowEmpty) => {
+                if (typeof value !== 'string') {
+                  throw new TypeError(`${'$'}{name} must be a string.`);
+                }
+                if ((!allowEmpty && value.trim() === '') || value.length > maxLength) {
+                  throw new RangeError(`${'$'}{name} has an invalid length.`);
+                }
+                return value;
+              };
+              const requireNotificationOptions = (options) => {
+                if (!options || typeof options !== 'object' || Array.isArray(options)) {
+                  throw new TypeError('Notification options must be an object.');
+                }
+                return {
+                  title: requireNotificationText(options.title, 'Notification title', 80, false),
+                  body: requireNotificationText(options.body == null ? '' : options.body, 'Notification body', 300, true),
+                };
+              };
+              const notifications = Object.freeze({
+                show(options) {
+                  return Promise.resolve().then(() => {
+                    const value = requireNotificationOptions(options);
+                    return hostRequest((requestId) =>
+                      nativeDevice.showNotification(requestId, value.title, value.body)
+                    );
+                  });
+                },
+                schedule(options) {
+                  return Promise.resolve().then(() => {
+                    const value = requireNotificationOptions(options);
+                    const id = requireKey(options.id, 'Notification');
+                    const at = options.at instanceof Date ? options.at.getTime() : options.at;
+                    if (!Number.isSafeInteger(at)) {
+                      throw new TypeError('A notification time must be a safe whole-number timestamp.');
+                    }
+                    return hostRequest((requestId) =>
+                      nativeDevice.scheduleNotification(requestId, id, value.title, value.body, at)
+                    );
+                  });
+                },
+                cancel(id) {
+                  return Promise.resolve().then(() => {
+                    const notificationId = requireKey(id, 'Notification');
+                    return hostRequest((requestId) =>
+                      nativeDevice.cancelNotification(requestId, notificationId)
+                    );
+                  });
+                },
+              });
+
               Object.defineProperty(window, 'sausage', {
-                value: Object.freeze({ storage, controls, db, navigation }),
+                value: Object.freeze({ storage, controls, db, navigation, location, notifications }),
                 writable: false,
                 configurable: false,
               });
@@ -731,8 +1291,15 @@ class MainActivity : Activity() {
             "typeof window.__sausageHandleBack === 'function' && window.__sausageHandleBack()"
         private const val TAG = "Sausage"
         private const val OPEN_DOCUMENT_REQUEST = 1001
+        private const val OPEN_PHOTO_REQUEST = 1002
+        private const val LOCATION_PERMISSION_REQUEST = 1003
+        private const val NOTIFICATION_PERMISSION_REQUEST = 1004
+        private const val FUSED_LOCATION_PROVIDER = "fused"
         private const val BUNDLED_DOCUMENT = "first-card.svge"
         private const val INPUT_DOCUMENT = "dream-note.svge"
+        private const val PHOTO_DOCUMENT = "dream-token.svge"
+        private const val DEVICE_DOCUMENT = "night-beacon.svge"
+        private const val LOCATION_TIMEOUT_MILLIS = 15_000L
 
         private val BACKGROUND = Color.rgb(7, 16, 30)
         private val PANEL = Color.rgb(16, 36, 59)

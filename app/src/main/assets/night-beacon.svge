@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:app="https://sausage.dev/ns/app/1"
+     viewBox="0 0 390 410"
+     width="100%"
+     height="100%"
+     preserveAspectRatio="xMidYMid meet">
+  <metadata>
+    <app:manifest
+        id="dev.sausage.night-beacon"
+        name="Night Beacon"
+        version="0.0.1"
+        profile-version="1">
+      <app:permission name="location" reason="Place the beacon at your current position" />
+      <app:permission name="notifications" reason="Send and schedule local beacon reminders" />
+    </app:manifest>
+    <app:screen id="beacon">
+      <app:graphic ref="night-beacon-art" />
+      <app:button label="Find my location" action="findBeaconLocation" />
+      <app:button label="Send a notification now" action="showBeaconNotification" />
+      <app:button label="Remind me in one minute" action="scheduleBeaconNotification" />
+      <app:button label="Cancel the reminder" action="cancelBeaconNotification" />
+    </app:screen>
+  </metadata>
+
+  <defs>
+    <linearGradient id="beacon-night" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06101e" />
+      <stop offset="0.62" stop-color="#102943" />
+      <stop offset="1" stop-color="#22445f" />
+    </linearGradient>
+    <radialGradient id="beacon-light">
+      <stop offset="0" stop-color="#fff4d6" stop-opacity="0.92" />
+      <stop offset="0.2" stop-color="#f6bf76" stop-opacity="0.62" />
+      <stop offset="1" stop-color="#f6bf76" stop-opacity="0" />
+    </radialGradient>
+    <filter id="beacon-blur">
+      <feGaussianBlur stdDeviation="12" />
+    </filter>
+  </defs>
+
+  <style>
+    text {
+      font-family: Inter, Roboto, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    #beacon-pulse {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: beacon-breathe 3.8s ease-in-out infinite;
+    }
+    #beacon-signal { opacity: .18; transition: opacity 320ms ease; }
+    #night-beacon-art.has-location #beacon-signal { opacity: .92; }
+    #night-beacon-art.notified #beacon-pulse { animation: beacon-flash 640ms ease; }
+    @keyframes beacon-breathe {
+      0%, 100% { transform: scale(.9); opacity: .62; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+    @keyframes beacon-flash {
+      0%, 100% { transform: scale(1); opacity: .72; }
+      45% { transform: scale(1.28); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #beacon-pulse, #night-beacon-art.notified #beacon-pulse { animation: none; }
+    }
+  </style>
+
+  <g id="night-beacon-art" aria-label="Night Beacon, waiting for a location">
+    <rect width="390" height="410" fill="url(#beacon-night)" />
+    <circle cx="321" cy="50" r="116" fill="#315d7e" opacity="0.16" />
+    <circle cx="66" cy="356" r="128" fill="#153955" opacity="0.28" />
+
+    <text x="24" y="43" fill="#9fb5cf" font-size="10" font-weight="700" letter-spacing="2.7">NIGHT BEACON</text>
+    <rect x="299" y="25" width="67" height="27" rx="13.5" fill="#ffffff" opacity="0.07" />
+    <text id="beacon-state" x="332.5" y="43" fill="#f8dba8" font-size="8" font-weight="800" text-anchor="middle" letter-spacing="0.7">READY</text>
+
+    <g id="beacon-pulse" pointer-events="none">
+      <circle cx="195" cy="169" r="102" fill="url(#beacon-light)" opacity="0.42" filter="url(#beacon-blur)" />
+      <circle cx="195" cy="169" r="73" fill="none" stroke="#f6bf76" stroke-width="1.5" opacity="0.62" />
+      <circle cx="195" cy="169" r="54" fill="#ffffff" opacity="0.045" />
+    </g>
+    <g id="beacon-signal" fill="none" stroke="#dbeaff" stroke-linecap="round" pointer-events="none">
+      <path d="M154 163 C165 149, 180 142, 195 142 C210 142, 225 149, 236 163" stroke-width="2" />
+      <path d="M166 175 C174 166, 184 161, 195 161 C206 161, 216 166, 224 175" stroke-width="2.5" />
+    </g>
+    <path d="M170 187 C179 171, 188 162, 195 162 C202 162, 211 171, 220 187
+             C220 207, 208 223, 195 237 C182 223, 170 207, 170 187 Z"
+          fill="#f8dba8" opacity="0.94" />
+    <circle cx="195" cy="188" r="8" fill="#17324d" />
+
+    <text id="beacon-title" x="195" y="294" fill="#f7f1e7" font-size="27" font-weight="760" text-anchor="middle">A signal in the dark.</text>
+    <text id="beacon-detail" x="195" y="322" fill="#9fb5cf" font-size="11" text-anchor="middle">Location and reminders, mediated by Android.</text>
+    <text id="beacon-coordinates" x="195" y="349" fill="#7893b2" font-size="10" font-weight="700" text-anchor="middle">No position requested</text>
+    <path d="M70 375 H320" stroke="#f6bf76" stroke-width="1" opacity="0.26" />
+  </g>
+
+  <script type="application/ecmascript"><![CDATA[
+    (() => {
+      const animateNotice = () => {
+        const art = document.getElementById('night-beacon-art');
+        art.classList.remove('notified');
+        void art.getBoundingClientRect();
+        art.classList.add('notified');
+      };
+
+      window.findBeaconLocation = async () => {
+        document.getElementById('beacon-state').textContent = 'SEEKING';
+        document.getElementById('beacon-title').textContent = 'Finding your beacon…';
+        document.getElementById('beacon-detail').textContent =
+          'A first fix can take longer indoors.';
+        const position = await window.sausage.location.current({ accuracy: 'balanced' });
+        const art = document.getElementById('night-beacon-art');
+        art.classList.add('has-location');
+        art.setAttribute(
+          'aria-label',
+          `Night Beacon at latitude ${position.latitude}, longitude ${position.longitude}`
+        );
+        document.getElementById('beacon-state').textContent = position.cached ? 'CACHED' : 'FOUND';
+        document.getElementById('beacon-title').textContent = 'Your beacon is placed.';
+        document.getElementById('beacon-detail').textContent =
+          `Accurate to about ${Math.round(position.accuracy)} metres`;
+        document.getElementById('beacon-coordinates').textContent =
+          `${position.latitude.toFixed(4)}, ${position.longitude.toFixed(4)}`;
+        return position.cached ? 'Previous position found' : 'Current position found';
+      };
+
+      window.showBeaconNotification = async () => {
+        await window.sausage.notifications.show({
+          title: 'Night Beacon',
+          body: 'Your first Sausage notification has arrived.'
+        });
+        animateNotice();
+        document.getElementById('beacon-state').textContent = 'SENT';
+        return 'Notification sent';
+      };
+
+      window.scheduleBeaconNotification = async () => {
+        await window.sausage.notifications.schedule({
+          id: 'night-beacon.reminder',
+          title: 'Night Beacon',
+          body: 'A quiet minute has passed. Notice where your mind went.',
+          at: Date.now() + 60 * 1000
+        });
+        animateNotice();
+        document.getElementById('beacon-state').textContent = 'SET';
+        return 'Reminder set; Android may deliver it a little later';
+      };
+
+      window.cancelBeaconNotification = async () => {
+        await window.sausage.notifications.cancel('night-beacon.reminder');
+        document.getElementById('beacon-state').textContent = 'READY';
+        return 'Reminder cancelled';
+      };
+    })();
+  ]]></script>
+</svg>

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:app="https://sausage.dev/ns/app/1"
+     viewBox="0 0 390 410"
+     width="100%"
+     height="100%"
+     preserveAspectRatio="xMidYMid meet">
+  <metadata>
+    <app:manifest
+        id="dev.sausage.dream-token"
+        name="Dream Token"
+        version="0.0.1"
+        profile-version="1" />
+    <app:screen id="token">
+      <app:graphic ref="dream-token-art" />
+      <app:photo
+          key="dream-token.photo"
+          label="Choose a dream image"
+          hint="Pick one image using Android. It stays only while this page is open."
+          target="dream-token-photo" />
+    </app:screen>
+  </metadata>
+
+  <defs>
+    <linearGradient id="token-night" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07101e" />
+      <stop offset="0.6" stop-color="#102842" />
+      <stop offset="1" stop-color="#1e3b57" />
+    </linearGradient>
+    <linearGradient id="token-wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.55" stop-color="#07101e" stop-opacity="0" />
+      <stop offset="1" stop-color="#07101e" stop-opacity="0.72" />
+    </linearGradient>
+    <radialGradient id="token-glow">
+      <stop offset="0" stop-color="#f8dba8" stop-opacity="0.58" />
+      <stop offset="1" stop-color="#f8dba8" stop-opacity="0" />
+    </radialGradient>
+    <clipPath id="token-window">
+      <rect x="51" y="91" width="288" height="225" rx="34" />
+    </clipPath>
+    <filter id="token-blur">
+      <feGaussianBlur stdDeviation="12" />
+    </filter>
+  </defs>
+
+  <style>
+    text {
+      font-family: Inter, Roboto, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    #token-orbit {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: token-breathe 5s ease-in-out infinite;
+    }
+    #dream-token-photo { opacity: 0; }
+    #dream-token-art.has-photo #dream-token-photo {
+      animation: token-reveal 720ms cubic-bezier(.2, .8, .2, 1) forwards;
+    }
+    #token-placeholder { transition: opacity 420ms ease; }
+    #dream-token-art.has-photo #token-placeholder { opacity: 0; }
+    #token-ring { transition: stroke 420ms ease, opacity 420ms ease; }
+    #dream-token-art.has-photo #token-ring { stroke: #f8dba8; opacity: .88; }
+    @keyframes token-breathe {
+      0%, 100% { transform: scale(.98); opacity: .74; }
+      50% { transform: scale(1.04); opacity: 1; }
+    }
+    @keyframes token-reveal {
+      0% { opacity: 0; transform: scale(1.06); transform-origin: center; }
+      100% { opacity: 1; transform: scale(1); transform-origin: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #token-orbit { animation: none; }
+      #dream-token-art.has-photo #dream-token-photo { animation-duration: 1ms; }
+    }
+  </style>
+
+  <g id="dream-token-art" aria-label="Dream Token, waiting for a chosen image">
+    <rect width="390" height="410" fill="url(#token-night)" />
+    <circle cx="320" cy="56" r="106" fill="url(#token-glow)" opacity="0.18" filter="url(#token-blur)" />
+    <circle cx="70" cy="348" r="116" fill="#285174" opacity="0.15" />
+
+    <text x="24" y="43" fill="#9fb5cf" font-size="10" font-weight="700" letter-spacing="2.7">DREAM TOKEN</text>
+    <rect x="298" y="25" width="68" height="27" rx="13.5" fill="#ffffff" opacity="0.07" />
+    <text id="token-state" x="332" y="43" fill="#f8dba8" font-size="8" font-weight="800" text-anchor="middle" letter-spacing="0.8">EMPTY</text>
+
+    <g id="token-orbit" fill="none" pointer-events="none">
+      <rect x="42" y="82" width="306" height="243" rx="42" stroke="#dbeaff" stroke-width="1" stroke-dasharray="3 9" opacity="0.32" />
+      <circle cx="331" cy="96" r="5" fill="#f8dba8" stroke="none" />
+      <circle cx="58" cy="307" r="3" fill="#dbeaff" stroke="none" opacity="0.72" />
+    </g>
+
+    <rect x="51" y="91" width="288" height="225" rx="34" fill="#0b1b2e" />
+    <g id="token-placeholder" clip-path="url(#token-window)">
+      <circle cx="195" cy="196" r="112" fill="url(#token-glow)" opacity="0.52" />
+      <circle cx="195" cy="183" r="58" fill="#fff4d6" opacity="0.88" />
+      <circle cx="216" cy="165" r="57" fill="#142e4b" />
+      <path d="M139 238 C165 253, 223 254, 252 226" fill="none" stroke="#efaa65" stroke-width="3" stroke-linecap="round" opacity="0.68" />
+    </g>
+    <image id="dream-token-photo"
+           x="51"
+           y="91"
+           width="288"
+           height="225"
+           preserveAspectRatio="xMidYMid slice"
+           clip-path="url(#token-window)" />
+    <rect x="51" y="91" width="288" height="225" rx="34" fill="url(#token-wash)" pointer-events="none" />
+    <rect id="token-ring" x="51" y="91" width="288" height="225" rx="34" fill="none" stroke="#55718e" stroke-width="2" opacity="0.62" pointer-events="none" />
+
+    <text id="token-title" x="195" y="355" fill="#f7f1e7" font-size="25" font-weight="750" text-anchor="middle">Give the memory a shape.</text>
+    <text id="token-caption" x="195" y="381" fill="#9fb5cf" font-size="11" text-anchor="middle">Choose something that carries the feeling.</text>
+  </g>
+
+  <script type="application/ecmascript"><![CDATA[
+    (() => {
+      window.addEventListener('sausage-ready', () => {
+        const art = document.getElementById('dream-token-art');
+        const state = document.getElementById('token-state');
+        const title = document.getElementById('token-title');
+        const caption = document.getElementById('token-caption');
+
+        window.sausage.controls.onChange('dream-token.photo', (photo) => {
+          if (photo == null) {
+            art.classList.remove('has-photo');
+            art.setAttribute('aria-label', 'Dream Token, waiting for a chosen image');
+            state.textContent = 'EMPTY';
+            title.textContent = 'Give the memory a shape.';
+            caption.textContent = 'Choose something that carries the feeling.';
+            return;
+          }
+
+          art.classList.remove('has-photo');
+          void art.getBoundingClientRect();
+          art.classList.add('has-photo');
+          art.setAttribute('aria-label', `Dream Token showing ${photo.name}`);
+          state.textContent = 'HELD';
+          title.textContent = 'A memory found.';
+          caption.textContent = photo.name;
+        });
+      }, { once: true });
+    })();
+  ]]></script>
+</svg>

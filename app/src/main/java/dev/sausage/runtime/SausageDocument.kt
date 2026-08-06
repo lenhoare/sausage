@@ -19,6 +19,7 @@ import kotlin.math.round
 internal data class SausageDocument(
     val displayName: String,
     val applicationId: String?,
+    val capabilities: Set<String>,
     val bundledAssetPath: String?,
     val storageScope: String,
     val flow: SausageFlow?,
@@ -65,6 +66,13 @@ internal data class SausageSlider(
     val max: Double,
     val step: Double,
     val value: Double,
+) : SausageSlice
+
+internal data class SausagePhoto(
+    val key: String,
+    val label: String,
+    val hint: String?,
+    val target: String,
 ) : SausageSlice
 
 internal data class SausageButton(
@@ -128,6 +136,7 @@ internal object SausageDocumentReader {
         return SausageDocument(
             displayName = displayName,
             applicationId = inspection.manifestId,
+            capabilities = inspection.capabilities,
             bundledAssetPath = bundledAssetPath,
             storageScope = inspection.manifestId ?: "document:${source.sha256()}",
             flow = inspection.flow,
@@ -223,6 +232,8 @@ internal object SausageDocumentReader {
             }
 
             var manifestId: String? = null
+            var manifestDepth: Int? = null
+            val capabilities = mutableSetOf<String>()
             var currentScreenDepth: Int? = null
             var currentScreenId: String? = null
             var currentScreenSlices: MutableList<SausageSlice>? = null
@@ -231,11 +242,16 @@ internal object SausageDocumentReader {
             val controlKeys = mutableSetOf<String>()
             val graphicRefs = mutableSetOf<String>()
             val svgIds = mutableSetOf<String>()
+            val svgImageIds = mutableSetOf<String>()
+            val photoTargets = mutableSetOf<String>()
 
             while (event != XmlPullParser.END_DOCUMENT) {
                 if (event == XmlPullParser.START_TAG) {
                     if (parser.namespace == SVG_NAMESPACE) {
-                        parser.getAttributeValue(null, SVG_ID_ATTRIBUTE)?.let(svgIds::add)
+                        parser.getAttributeValue(null, SVG_ID_ATTRIBUTE)?.let { id ->
+                            svgIds.add(id)
+                            if (parser.name == SVG_IMAGE_ELEMENT) svgImageIds.add(id)
+                        }
                     }
 
                     if (parser.namespace == APP_NAMESPACE) {
@@ -249,6 +265,23 @@ internal object SausageDocumentReader {
                                     throw SausageDocumentException("$displayName declares more than one Sausage application ID.")
                                 }
                                 manifestId = candidate
+                                manifestDepth = parser.depth
+                            }
+
+                            PERMISSION_ELEMENT -> if (parser.isDirectChildOf(manifestDepth)) {
+                                val capability = parser.requiredAttribute(
+                                    PERMISSION_NAME_ATTRIBUTE,
+                                    displayName,
+                                )
+                                if (!CAPABILITY_NAME.matches(capability)) {
+                                    throw SausageDocumentException("$displayName has an invalid capability name.")
+                                }
+                                parser.requiredAttribute(PERMISSION_REASON_ATTRIBUTE, displayName)
+                                if (!capabilities.add(capability)) {
+                                    throw SausageDocumentException(
+                                        "$displayName declares the $capability capability more than once.",
+                                    )
+                                }
                             }
 
                             SCREEN_ELEMENT -> {
@@ -375,6 +408,29 @@ internal object SausageDocumentReader {
                                 ))
                             }
 
+                            PHOTO_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
+                                val key = parser.requiredAttribute(CONTROL_KEY_ATTRIBUTE, displayName)
+                                if (!CONTROL_KEY.matches(key)) {
+                                    throw SausageDocumentException("$displayName has an invalid photo control key.")
+                                }
+                                if (!controlKeys.add(key)) {
+                                    throw SausageDocumentException("$displayName uses the control key $key more than once.")
+                                }
+                                val target = parser.requiredAttribute(PHOTO_TARGET_ATTRIBUTE, displayName)
+                                if (!SVG_TARGET_ID.matches(target)) {
+                                    throw SausageDocumentException("$displayName has an invalid photo target ID.")
+                                }
+                                if (!photoTargets.add(target)) {
+                                    throw SausageDocumentException("$displayName uses the photo target $target more than once.")
+                                }
+                                currentScreenSlices?.add(SausagePhoto(
+                                    key = key,
+                                    label = parser.requiredAttribute(CONTROL_LABEL_ATTRIBUTE, displayName),
+                                    hint = parser.getAttributeValue(null, CONTROL_HINT_ATTRIBUTE),
+                                    target = target,
+                                ))
+                            }
+
                             BUTTON_ELEMENT -> if (parser.isDirectChildOf(currentScreenDepth)) {
                                 val action = parser.optionalAttribute(BUTTON_ACTION_ATTRIBUTE)
                                 val targetScreen = parser.optionalAttribute(BUTTON_TARGET_SCREEN_ATTRIBUTE)
@@ -413,6 +469,13 @@ internal object SausageDocumentReader {
                     currentScreenDepth = null
                     currentScreenId = null
                     currentScreenSlices = null
+                } else if (
+                    event == XmlPullParser.END_TAG &&
+                    parser.namespace == APP_NAMESPACE &&
+                    parser.name == MANIFEST_ELEMENT &&
+                    parser.depth == manifestDepth
+                ) {
+                    manifestDepth = null
                 }
                 event = parser.next()
             }
@@ -429,12 +492,19 @@ internal object SausageDocumentReader {
                         throw SausageDocumentException("$displayName has a button that targets a missing screen: $target.")
                     }
                 }
+                flowScreens.flatMap(SausageScreen::slices).filterIsInstance<SausagePhoto>().forEach { photo ->
+                    if (photo.target !in svgImageIds) {
+                        throw SausageDocumentException(
+                            "$displayName refers to a missing SVG image for photo target: ${photo.target}.",
+                        )
+                    }
+                }
                 SausageFlow(flowScreens.toList())
             } else {
                 null
             }
 
-            DocumentInspection(manifestId, flow)
+            DocumentInspection(manifestId, capabilities.toSet(), flow)
         } catch (error: SausageDocumentException) {
             throw error
         } catch (error: Exception) {
@@ -523,6 +593,9 @@ internal object SausageDocumentReader {
     private const val APP_NAMESPACE = "https://sausage.dev/ns/app/1"
     private const val MANIFEST_ELEMENT = "manifest"
     private const val MANIFEST_ID_ATTRIBUTE = "id"
+    private const val PERMISSION_ELEMENT = "permission"
+    private const val PERMISSION_NAME_ATTRIBUTE = "name"
+    private const val PERMISSION_REASON_ATTRIBUTE = "reason"
     private const val SCREEN_ELEMENT = "screen"
     private const val SCREEN_ID_ATTRIBUTE = "id"
     private const val GRAPHIC_ELEMENT = "graphic"
@@ -530,7 +603,9 @@ internal object SausageDocumentReader {
     private const val CHOICE_ELEMENT = "choice"
     private const val SWITCH_ELEMENT = "switch"
     private const val SLIDER_ELEMENT = "slider"
+    private const val PHOTO_ELEMENT = "photo"
     private const val BUTTON_ELEMENT = "button"
+    private const val SVG_IMAGE_ELEMENT = "image"
     private const val FLOW_GRAPHIC_REF_ATTRIBUTE = "ref"
     private const val CONTROL_KEY_ATTRIBUTE = "key"
     private const val CONTROL_LABEL_ATTRIBUTE = "label"
@@ -541,18 +616,22 @@ internal object SausageDocumentReader {
     private const val SLIDER_MAX_ATTRIBUTE = "max"
     private const val SLIDER_STEP_ATTRIBUTE = "step"
     private const val SLIDER_VALUE_ATTRIBUTE = "value"
+    private const val PHOTO_TARGET_ATTRIBUTE = "target"
     private const val BUTTON_ACTION_ATTRIBUTE = "action"
     private const val BUTTON_TARGET_SCREEN_ATTRIBUTE = "target-screen"
     private const val SVG_ID_ATTRIBUTE = "id"
     private const val MIN_CHOICE_OPTIONS = 2
     private const val MAX_CHOICE_OPTIONS = 8
     private val APPLICATION_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+    private val CAPABILITY_NAME = Regex("[a-z][a-z0-9.-]{0,63}")
     private val CONTROL_KEY = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
     private val SCREEN_ID = Regex("[A-Za-z][A-Za-z0-9._-]{0,63}")
+    private val SVG_TARGET_ID = Regex("[A-Za-z_][A-Za-z0-9._:-]{0,127}")
     private val ACTION_NAME = Regex("[A-Za-z_${'$'}][A-Za-z0-9_${'$'}]{0,63}")
 
     private data class DocumentInspection(
         val manifestId: String?,
+        val capabilities: Set<String>,
         val flow: SausageFlow?,
     )
 }
