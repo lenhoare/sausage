@@ -36,6 +36,8 @@ The fifteenth slice adds the first device capability through the semantic `app:p
 
 The sixteenth slice adds two explicitly declared host capabilities. `sausage.location.current({ accuracy })` requests one foreground position, returns coordinates, metre accuracy, timestamp and whether a cached fallback was used, then detaches its Android listener. `sausage.notifications.show(options)`, `schedule(options)` and `cancel(id)` provide immediate and one-off local reminders through an application-scoped Android notification channel. Scheduled reminders use battery-conscious inexact alarms, survive the renderer closing but not a device reboot, and may be delivered later than their requested time. [`night-beacon.svge`](app/src/main/assets/night-beacon.svge) exercises both APIs, with Android runtime permission prompts occurring only at first use.
 
+The seventeenth slice adds three small manifest-gated device services. `sausage.clipboard.readText()` and `writeText(text)` exchange bounded plain text with Android's clipboard, `sausage.share.text({ title, text })` opens the system share sheet without revealing target applications to the document, and `sausage.haptics.perform(pattern)` offers only the bounded `light`, `medium` and `success` feedback patterns. Night Beacon demonstrates all three; arbitrary clipboard formats, direct sharing targets and custom vibration waveforms remain unavailable.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

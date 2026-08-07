@@ -3,6 +3,8 @@ package dev.sausage.runtime
 import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -16,6 +18,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -431,6 +436,18 @@ class MainActivity : Activity() {
                     )
                 }
             },
+            onReadClipboard = { requestId ->
+                runOnUiThread { readClipboard(document, requestId) }
+            },
+            onWriteClipboard = { requestId, text ->
+                runOnUiThread { writeClipboard(document, requestId, text) }
+            },
+            onShareText = { requestId, title, text ->
+                runOnUiThread { shareText(document, requestId, title, text) }
+            },
+            onPerformHaptic = { requestId, pattern ->
+                runOnUiThread { performHaptic(document, requestId, pattern) }
+            },
         )
 
         val view = WebView(this).apply {
@@ -779,6 +796,105 @@ class MainActivity : Activity() {
             "window.__sausageCompleteHostRequest(${JSONObject.quote(requestId)}, ${JSONObject.quote(result)})",
             null,
         )
+    }
+
+    private fun readClipboard(
+        document: SausageDocument,
+        requestId: String,
+    ) {
+        if (screen != Screen.DOCUMENT || currentDocument !== document) return
+        try {
+            val clipboard = getSystemService(ClipboardManager::class.java)
+            val text = clipboard.primaryClip
+                ?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.coerceToText(this)
+                ?.toString()
+            if (text != null && text.length > MAX_CLIPBOARD_TEXT_LENGTH) {
+                throw IllegalStateException("Clipboard text is too large for a Sausage document.")
+            }
+            completeHostRequest(document, requestId, value = text)
+        } catch (error: Exception) {
+            Log.w(TAG, "Clipboard read failed", error)
+            completeHostRequest(document, requestId, error = error.message ?: "The clipboard could not be read.")
+        }
+    }
+
+    private fun writeClipboard(
+        document: SausageDocument,
+        requestId: String,
+        text: String,
+    ) {
+        if (screen != Screen.DOCUMENT || currentDocument !== document) return
+        try {
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(
+                ClipData.newPlainText(document.displayName.removeSuffix(".svge"), text),
+            )
+            completeHostRequest(document, requestId, value = JSONObject().put("written", true))
+        } catch (error: Exception) {
+            Log.w(TAG, "Clipboard write failed", error)
+            completeHostRequest(document, requestId, error = error.message ?: "The clipboard could not be written.")
+        }
+    }
+
+    private fun shareText(
+        document: SausageDocument,
+        requestId: String,
+        title: String,
+        text: String,
+    ) {
+        if (screen != Screen.DOCUMENT || currentDocument !== document) return
+        try {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                if (title.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, title)
+            }
+            val chooserTitle = title.ifEmpty { getString(R.string.share_text) }
+            startActivity(Intent.createChooser(sendIntent, chooserTitle))
+            completeHostRequest(document, requestId, value = JSONObject().put("opened", true))
+        } catch (error: Exception) {
+            Log.w(TAG, "Text share failed", error)
+            completeHostRequest(document, requestId, error = "Android could not open the share sheet.")
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun performHaptic(
+        document: SausageDocument,
+        requestId: String,
+        pattern: String,
+    ) {
+        if (screen != Screen.DOCUMENT || currentDocument !== document) return
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                getSystemService(VibratorManager::class.java).defaultVibrator
+            } else {
+                getSystemService(Vibrator::class.java)
+            }
+            if (!vibrator.hasVibrator()) {
+                throw IllegalStateException("This device does not provide haptic feedback.")
+            }
+            val effect = when (pattern) {
+                "light" -> VibrationEffect.createOneShot(18L, 70)
+                "medium" -> VibrationEffect.createOneShot(32L, 125)
+                "success" -> VibrationEffect.createWaveform(
+                    longArrayOf(0L, 22L, 55L, 34L),
+                    intArrayOf(0, 80, 0, 145),
+                    -1,
+                )
+                else -> throw IllegalArgumentException("Unknown haptic pattern.")
+            }
+            vibrator.vibrate(effect)
+            completeHostRequest(
+                document,
+                requestId,
+                value = JSONObject().put("performed", true).put("pattern", pattern),
+            )
+        } catch (error: Exception) {
+            Log.w(TAG, "Haptic feedback failed", error)
+            completeHostRequest(document, requestId, error = error.message ?: "Haptic feedback is unavailable.")
+        }
     }
 
     private fun hasPermission(permission: String): Boolean =
@@ -1272,8 +1388,70 @@ class MainActivity : Activity() {
                 },
               });
 
+              const requireBoundedText = (value, name, maxLength, allowEmpty) => {
+                if (typeof value !== 'string') {
+                  throw new TypeError(`${'$'}{name} must be a string.`);
+                }
+                if ((!allowEmpty && value.trim() === '') || value.length > maxLength) {
+                  throw new RangeError(`${'$'}{name} has an invalid length.`);
+                }
+                return value;
+              };
+              const clipboard = Object.freeze({
+                readText() {
+                  return hostRequest((requestId) => nativeDevice.readClipboard(requestId));
+                },
+                writeText(text) {
+                  return Promise.resolve().then(() => hostRequest((requestId) =>
+                    nativeDevice.writeClipboard(
+                      requestId,
+                      requireBoundedText(text, 'Clipboard text', 16384, true)
+                    )
+                  ));
+                },
+              });
+              const share = Object.freeze({
+                text(options) {
+                  return Promise.resolve().then(() => {
+                    if (!options || typeof options !== 'object' || Array.isArray(options)) {
+                      throw new TypeError('Share options must be an object.');
+                    }
+                    const title = requireBoundedText(
+                      options.title == null ? '' : options.title,
+                      'Share title',
+                      80,
+                      true
+                    );
+                    const value = requireBoundedText(options.text, 'Shared text', 20000, false);
+                    return hostRequest((requestId) =>
+                      nativeDevice.shareText(requestId, title, value)
+                    );
+                  });
+                },
+              });
+              const haptics = Object.freeze({
+                perform(pattern = 'light') {
+                  return Promise.resolve().then(() => {
+                    if (pattern !== 'light' && pattern !== 'medium' && pattern !== 'success') {
+                      throw new RangeError('A haptic pattern must be light, medium or success.');
+                    }
+                    return hostRequest((requestId) => nativeDevice.performHaptic(requestId, pattern));
+                  });
+                },
+              });
+
               Object.defineProperty(window, 'sausage', {
-                value: Object.freeze({ storage, controls, db, navigation, location, notifications }),
+                value: Object.freeze({
+                  storage,
+                  controls,
+                  db,
+                  navigation,
+                  location,
+                  notifications,
+                  clipboard,
+                  share,
+                  haptics,
+                }),
                 writable: false,
                 configurable: false,
               });
@@ -1300,6 +1478,7 @@ class MainActivity : Activity() {
         private const val PHOTO_DOCUMENT = "dream-token.svge"
         private const val DEVICE_DOCUMENT = "night-beacon.svge"
         private const val LOCATION_TIMEOUT_MILLIS = 15_000L
+        private const val MAX_CLIPBOARD_TEXT_LENGTH = 16_384
 
         private val BACKGROUND = Color.rgb(7, 16, 30)
         private val PANEL = Color.rgb(16, 36, 59)

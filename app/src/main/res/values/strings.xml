@@ -10,9 +10,10 @@
     <string name="open_input_sample">Open Dream Note</string>
     <string name="open_photo_sample">Open Dream Token</string>
     <string name="open_device_sample">Open Night Beacon</string>
-    <string name="home_footer">Slice 16 · Location and notifications</string>
+    <string name="home_footer">Slice 17 · Clipboard, sharing and haptics</string>
     <string name="document_accessibility">Sausage document: %1$s</string>
     <string name="document_load_error_title">Couldn’t open this journey</string>
     <string name="document_load_error_message">The bundled Sausage document could not be loaded.</string>
     <string name="back_home">Back to Sausage</string>
+    <string name="share_text">Share text</string>
 </resources>

@@ -471,6 +471,8 @@ The initial location baseline implements a single foreground request with `balan
 
 The initial notification baseline implements `sausage.notifications.show({ title, body })`, `schedule({ id, title, body, at })` and `cancel(id)`. `at` is a JavaScript epoch-millisecond timestamp or `Date`. Scheduled reminders use Android's inexact alarm facility: they never fire before the requested time but may be delayed by battery management. They survive document and process closure, but reboot restoration and repeating notifications remain deferred.
 
+The initial clipboard, share and haptics baseline exposes bounded plain text through `sausage.clipboard.readText()` and `writeText(text)`, launches Android's chooser through `sausage.share.text({ title, text })`, and limits `sausage.haptics.perform(pattern)` to `light`, `medium` or `success`. Each API requires its matching manifest declaration. Rich clipboard formats, direct share targets and author-defined vibration waveforms remain unavailable.
+
 ### 9.4 Document-to-control state — INITIAL BASELINE PROVEN
 
 Control state MUST be readable and writable through the host API.
@@ -698,9 +700,9 @@ The runtime requests Android permission at first use, or during an explicit appl
 | Photo picker | Select one image — INITIAL BASELINE PROVEN |
 | Microphone | Record a bounded audio clip |
 | Location | One foreground current position — INITIAL BASELINE PROVEN |
-| Haptics | Simple vibration patterns |
-| Clipboard | Read/write with platform restrictions |
-| Share | Android share sheet |
+| Haptics | Simple bounded vibration patterns — INITIAL BASELINE PROVEN |
+| Clipboard | Bounded plain-text read/write with platform restrictions — INITIAL BASELINE PROVEN |
+| Share | Text through the Android share sheet — INITIAL BASELINE PROVEN |
 | Notifications | Immediate and one-off scheduled local notifications — INITIAL BASELINE PROVEN |
 | Files | User-selected open/save only |
 | Network | HTTPS to declared origins |

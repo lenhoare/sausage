@@ -16,6 +16,10 @@ internal class SausageDeviceBridge(
         atMillis: Long,
     ) -> Unit,
     private val onCancelNotification: (requestId: String, notificationId: String) -> Unit,
+    private val onReadClipboard: (requestId: String) -> Unit,
+    private val onWriteClipboard: (requestId: String, text: String) -> Unit,
+    private val onShareText: (requestId: String, title: String, text: String) -> Unit,
+    private val onPerformHaptic: (requestId: String, pattern: String) -> Unit,
 ) {
     @JavascriptInterface
     fun currentLocation(
@@ -82,6 +86,54 @@ internal class SausageDeviceBridge(
         true
     }
 
+    @JavascriptInterface
+    fun readClipboard(requestId: String): String = response {
+        requireCapability(CLIPBOARD_CAPABILITY)
+        requestId.requireRequestId()
+        onReadClipboard(requestId)
+        true
+    }
+
+    @JavascriptInterface
+    fun writeClipboard(
+        requestId: String,
+        text: String,
+    ): String = response {
+        requireCapability(CLIPBOARD_CAPABILITY)
+        requestId.requireRequestId()
+        text.requireText("Clipboard text", MAX_CLIPBOARD_LENGTH, allowEmpty = true)
+        onWriteClipboard(requestId, text)
+        true
+    }
+
+    @JavascriptInterface
+    fun shareText(
+        requestId: String,
+        title: String,
+        text: String,
+    ): String = response {
+        requireCapability(SHARE_CAPABILITY)
+        requestId.requireRequestId()
+        title.requireText("Share titles", MAX_SHARE_TITLE_LENGTH, allowEmpty = true)
+        text.requireText("Shared text", MAX_SHARE_TEXT_LENGTH, allowEmpty = false)
+        onShareText(requestId, title, text)
+        true
+    }
+
+    @JavascriptInterface
+    fun performHaptic(
+        requestId: String,
+        pattern: String,
+    ): String = response {
+        requireCapability(HAPTICS_CAPABILITY)
+        requestId.requireRequestId()
+        if (pattern !in HAPTIC_PATTERNS) {
+            throw IllegalArgumentException("A haptic pattern must be light, medium or success.")
+        }
+        onPerformHaptic(requestId, pattern)
+        true
+    }
+
     private fun requireCapability(capability: String) {
         if (capability !in capabilities) {
             throw SecurityException("This document does not declare the $capability capability.")
@@ -129,11 +181,18 @@ internal class SausageDeviceBridge(
         const val JAVASCRIPT_NAME = "__sausageDevice"
         const val LOCATION_CAPABILITY = "location"
         const val NOTIFICATIONS_CAPABILITY = "notifications"
+        const val CLIPBOARD_CAPABILITY = "clipboard"
+        const val SHARE_CAPABILITY = "share"
+        const val HAPTICS_CAPABILITY = "haptics"
 
         private val REQUEST_ID = Regex("host-[1-9][0-9]{0,14}")
         private val NOTIFICATION_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+        private val HAPTIC_PATTERNS = setOf("light", "medium", "success")
         private const val MAX_TITLE_LENGTH = 80
         private const val MAX_BODY_LENGTH = 300
+        private const val MAX_CLIPBOARD_LENGTH = 16_384
+        private const val MAX_SHARE_TITLE_LENGTH = 80
+        private const val MAX_SHARE_TEXT_LENGTH = 20_000
         private const val MAX_ERROR_LENGTH = 300
         private const val PAST_TIME_TOLERANCE_MILLIS = 5_000L
         private const val MAX_SCHEDULE_AHEAD_MILLIS = 366L * 24L * 60L * 60L * 1_000L

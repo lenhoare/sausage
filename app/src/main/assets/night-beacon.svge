@@ -13,6 +13,9 @@
         profile-version="1">
       <app:permission name="location" reason="Place the beacon at your current position" />
       <app:permission name="notifications" reason="Send and schedule local beacon reminders" />
+      <app:permission name="clipboard" reason="Copy and read back a short beacon status" />
+      <app:permission name="share" reason="Open Android's share sheet with a beacon status" />
+      <app:permission name="haptics" reason="Mark a beacon signal with gentle vibration" />
     </app:manifest>
     <app:screen id="beacon">
       <app:graphic ref="night-beacon-art" />
@@ -20,6 +23,9 @@
       <app:button label="Send a notification now" action="showBeaconNotification" />
       <app:button label="Remind me in one minute" action="scheduleBeaconNotification" />
       <app:button label="Cancel the reminder" action="cancelBeaconNotification" />
+      <app:button label="Copy beacon status" action="copyBeaconStatus" />
+      <app:button label="Share beacon status" action="shareBeaconStatus" />
+      <app:button label="Feel the beacon pulse" action="feelBeaconPulse" />
     </app:screen>
   </metadata>
 
@@ -103,6 +109,13 @@
         art.classList.add('notified');
       };
 
+      const beaconStatus = () => {
+        const coordinates = document.getElementById('beacon-coordinates').textContent;
+        return coordinates === 'No position requested'
+          ? 'Night Beacon is ready for a signal.'
+          : `Night Beacon is placed at ${coordinates}.`;
+      };
+
       window.findBeaconLocation = async () => {
         document.getElementById('beacon-state').textContent = 'SEEKING';
         document.getElementById('beacon-title').textContent = 'Finding your beacon…';
@@ -150,6 +163,30 @@
         await window.sausage.notifications.cancel('night-beacon.reminder');
         document.getElementById('beacon-state').textContent = 'READY';
         return 'Reminder cancelled';
+      };
+
+      window.copyBeaconStatus = async () => {
+        const status = beaconStatus();
+        await window.sausage.clipboard.writeText(status);
+        const copied = await window.sausage.clipboard.readText();
+        document.getElementById('beacon-state').textContent = 'COPIED';
+        return copied === status ? 'Beacon status copied' : 'Beacon status sent to clipboard';
+      };
+
+      window.shareBeaconStatus = async () => {
+        await window.sausage.share.text({
+          title: 'Night Beacon',
+          text: beaconStatus()
+        });
+        document.getElementById('beacon-state').textContent = 'SHARING';
+        return 'Android share sheet opened';
+      };
+
+      window.feelBeaconPulse = async () => {
+        await window.sausage.haptics.perform('success');
+        animateNotice();
+        document.getElementById('beacon-state').textContent = 'PULSE';
+        return 'Beacon pulse felt';
       };
     })();
   ]]></script>

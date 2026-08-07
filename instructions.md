@@ -94,6 +94,9 @@ Device features must be declared as direct children of the manifest:
 <app:manifest id="dev.example.beacon" name="Beacon" version="0.0.1" profile-version="1">
   <app:permission name="location" reason="Place the beacon at your position" />
   <app:permission name="notifications" reason="Send local reminders" />
+  <app:permission name="clipboard" reason="Copy a result when requested" />
+  <app:permission name="share" reason="Share a result through Android" />
+  <app:permission name="haptics" reason="Confirm important actions with gentle feedback" />
 </app:manifest>
 ```
 
@@ -109,9 +112,16 @@ await sausage.notifications.schedule({
   at: Date.now() + 60 * 60 * 1000
 });
 await sausage.notifications.cancel("evening-reminder");
+
+await sausage.clipboard.writeText("A short result");
+const pasted = await sausage.clipboard.readText(); // string or null
+
+await sausage.share.text({ title: "Beacon", text: "A short result" });
+await sausage.haptics.perform("success"); // light, medium or success
 ```
 
 Location is foreground-only. Use `balanced` unless precision is genuinely needed. Scheduled notifications are one-off and inexact, so Android may deliver them late.
+Clipboard and sharing accept plain text only. Haptic patterns are fixed and bounded; documents cannot define arbitrary vibration waveforms.
 
 ## Small complete example
 
