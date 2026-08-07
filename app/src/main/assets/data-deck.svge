@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:app="https://sausage.dev/ns/app/1"
+     viewBox="0 0 390 560"
+     width="100%"
+     height="100%"
+     preserveAspectRatio="xMidYMid meet">
+  <metadata>
+    <app:manifest
+        id="dev.sausage.data-deck"
+        name="Data Deck"
+        version="0.0.1"
+        profile-version="1">
+      <app:permission name="files" reason="Import a user-selected JSON, Markdown or plain-text file" />
+    </app:manifest>
+    <app:screen id="deck">
+      <app:graphic ref="data-deck-art" />
+      <app:button label="Import a data file" action="importDataFile" />
+    </app:screen>
+  </metadata>
+
+  <defs>
+    <linearGradient id="deck-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f" />
+      <stop offset="0.58" stop-color="#102a43" />
+      <stop offset="1" stop-color="#21465d" />
+    </linearGradient>
+    <linearGradient id="deck-card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#193651" />
+      <stop offset="1" stop-color="#112942" />
+    </linearGradient>
+    <filter id="deck-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#020812" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <style>
+    text { font-family: Inter, Roboto, Arial, sans-serif; text-rendering: geometricPrecision; }
+    .deck-card { transition: opacity 220ms ease, transform 220ms ease; }
+    .deck-card.is-empty { opacity: .24; }
+    #data-deck-art.imported .deck-card { animation: deck-arrive 420ms ease both; }
+    #data-deck-art.imported #deck-card-2 { animation-delay: 45ms; }
+    #data-deck-art.imported #deck-card-3 { animation-delay: 90ms; }
+    #data-deck-art.imported #deck-card-4 { animation-delay: 135ms; }
+    @keyframes deck-arrive {
+      from { opacity: .2; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #data-deck-art.imported .deck-card { animation: none; }
+    }
+  </style>
+
+  <g id="data-deck-art" aria-label="Data Deck, waiting for a text data file">
+    <rect width="390" height="560" fill="url(#deck-bg)" />
+    <circle cx="358" cy="12" r="118" fill="#5f8daa" opacity=".11" />
+    <circle cx="12" cy="530" r="126" fill="#183d58" opacity=".34" />
+
+    <text x="24" y="40" fill="#9fb5cf" font-size="9.5" font-weight="750" letter-spacing="2.4">DATA DECK</text>
+    <rect x="307" y="22" width="59" height="25" rx="12.5" fill="#ffffff" opacity=".07" />
+    <text id="deck-state" x="336.5" y="39" fill="#f8dba8" font-size="7.5" font-weight="800" text-anchor="middle" letter-spacing=".7">WAITING</text>
+
+    <text id="deck-title" x="24" y="88" fill="#fff7e9" font-size="26" font-weight="760">Bring your own ideas.</text>
+    <text id="deck-subtitle" x="24" y="112" fill="#9fb5cf" font-size="10.5">JSON becomes structured cards; Markdown becomes lines.</text>
+
+    <g id="deck-card-1" class="deck-card" filter="url(#deck-shadow)">
+      <rect x="24" y="140" width="342" height="78" rx="18" fill="url(#deck-card)" stroke="#b8cfe9" stroke-opacity=".16" />
+      <rect x="39" y="157" width="43" height="18" rx="9" fill="#efaa65" opacity=".16" />
+      <text id="deck-label-1" x="60.5" y="169.5" fill="#f8dba8" font-size="7" font-weight="800" text-anchor="middle" letter-spacing=".6">JSON</text>
+      <text id="deck-detail-1" x="39" y="195" fill="#e9f1fa" font-size="12" font-weight="650">Import a title, subtitle and up to four cards.</text>
+    </g>
+    <g id="deck-card-2" class="deck-card" filter="url(#deck-shadow)">
+      <rect x="24" y="230" width="342" height="78" rx="18" fill="url(#deck-card)" stroke="#b8cfe9" stroke-opacity=".16" />
+      <rect x="39" y="247" width="43" height="18" rx="9" fill="#efaa65" opacity=".16" />
+      <text id="deck-label-2" x="60.5" y="259.5" fill="#f8dba8" font-size="7" font-weight="800" text-anchor="middle" letter-spacing=".6">MD</text>
+      <text id="deck-detail-2" x="39" y="285" fill="#e9f1fa" font-size="12" font-weight="650">Or turn the first meaningful lines into a deck.</text>
+    </g>
+    <g id="deck-card-3" class="deck-card" filter="url(#deck-shadow)">
+      <rect x="24" y="320" width="342" height="78" rx="18" fill="url(#deck-card)" stroke="#b8cfe9" stroke-opacity=".16" />
+      <rect x="39" y="337" width="43" height="18" rx="9" fill="#efaa65" opacity=".16" />
+      <text id="deck-label-3" x="60.5" y="349.5" fill="#f8dba8" font-size="7" font-weight="800" text-anchor="middle" letter-spacing=".6">SAFE</text>
+      <text id="deck-detail-3" x="39" y="375" fill="#e9f1fa" font-size="12" font-weight="650">Android grants access only to the file you choose.</text>
+    </g>
+    <g id="deck-card-4" class="deck-card" filter="url(#deck-shadow)">
+      <rect x="24" y="410" width="342" height="78" rx="18" fill="url(#deck-card)" stroke="#b8cfe9" stroke-opacity=".16" />
+      <rect x="39" y="427" width="43" height="18" rx="9" fill="#efaa65" opacity=".16" />
+      <text id="deck-label-4" x="60.5" y="439.5" fill="#f8dba8" font-size="7" font-weight="800" text-anchor="middle" letter-spacing=".6">1 MB</text>
+      <text id="deck-detail-4" x="39" y="465" fill="#e9f1fa" font-size="12" font-weight="650">The runtime returns bounded UTF-8 text, not a path.</text>
+    </g>
+
+    <path d="M24 516 H366" stroke="#f6bf76" stroke-width="1" opacity=".22" />
+    <text id="deck-file" x="24" y="540" fill="#7893b2" font-size="9.5" font-weight="700">Choose .json, .md or .txt</text>
+  </g>
+
+  <script type="application/ecmascript"><![CDATA[
+    (() => {
+      const cards = [1, 2, 3, 4];
+      const shortText = (value, maximum, name) => {
+        if (typeof value !== 'string') throw new TypeError(`${name} must be text.`);
+        const clean = value.replace(/\s+/g, ' ').trim();
+        if (!clean) throw new TypeError(`${name} may not be empty.`);
+        return clean.length <= maximum ? clean : `${clean.slice(0, maximum - 1)}…`;
+      };
+      const setCard = (index, label, detail) => {
+        const card = document.getElementById(`deck-card-${index}`);
+        if (detail == null) {
+          card.classList.add('is-empty');
+          document.getElementById(`deck-label-${index}`).textContent = 'EMPTY';
+          document.getElementById(`deck-detail-${index}`).textContent = 'No imported item for this card.';
+          return;
+        }
+        card.classList.remove('is-empty');
+        document.getElementById(`deck-label-${index}`).textContent = shortText(label, 9, 'Card label').toUpperCase();
+        document.getElementById(`deck-detail-${index}`).textContent = shortText(detail, 52, 'Card detail');
+      };
+      const showJson = (file) => {
+        const data = JSON.parse(file.text);
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+          throw new TypeError('The JSON root must be an object.');
+        }
+        if (!Array.isArray(data.cards)) throw new TypeError('JSON must contain a cards array.');
+        document.getElementById('deck-title').textContent = shortText(data.title, 28, 'Title');
+        document.getElementById('deck-subtitle').textContent = shortText(data.subtitle, 62, 'Subtitle');
+        cards.forEach((index) => {
+          const card = data.cards[index - 1];
+          if (card == null) return setCard(index, '', null);
+          if (typeof card !== 'object' || Array.isArray(card)) {
+            throw new TypeError(`Card ${index} must be an object.`);
+          }
+          setCard(index, card.label, card.detail);
+        });
+      };
+      const showLines = (file) => {
+        const lines = file.text
+          .split(/\r?\n/)
+          .map((line) => line.replace(/^#{1,6}\s+/, '').trim())
+          .map((line) => line.replace(/^(?:[-*+] |\d+[.)] )/, ''))
+          .filter(Boolean);
+        if (!lines.length) throw new TypeError('The selected text file is empty.');
+        document.getElementById('deck-title').textContent = shortText(lines[0], 28, 'First line');
+        document.getElementById('deck-subtitle').textContent = shortText(file.name, 62, 'File name');
+        cards.forEach((index) => setCard(index, `Line ${index}`, lines[index] || null));
+      };
+
+      window.importDataFile = async () => {
+        const file = await window.sausage.files.openText({
+          extensions: ['.json', '.md', '.txt']
+        });
+        if (file == null) return 'No file selected';
+        if (file.name.toLowerCase().endsWith('.json')) showJson(file);
+        else showLines(file);
+        const art = document.getElementById('data-deck-art');
+        art.classList.remove('imported');
+        void art.getBoundingClientRect();
+        art.classList.add('imported');
+        art.setAttribute('aria-label', `Data Deck showing ${file.name}`);
+        document.getElementById('deck-state').textContent = 'LOADED';
+        document.getElementById('deck-file').textContent =
+          `${file.name} · ${file.size.toLocaleString()} bytes`;
+        return `${file.name} imported`;
+      };
+    })();
+  ]]></script>
+</svg>

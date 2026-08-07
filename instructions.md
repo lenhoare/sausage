@@ -15,6 +15,7 @@ When asked to create an app, output the complete `.svge` file and little or no e
 - Button actions name global functions: assign them as `window.actionName = ...`. An action may be async and may return a short status string.
 - Put JavaScript inside CDATA. Wait for `sausage-ready` before reading restored control state.
 - Keep resources embedded. Do not rely on external images, fonts, libraries or network access.
+- Open user-supplied text data only through `sausage.files`; do not use browser file APIs or assume filesystem paths.
 - Do not invent elements or APIs not listed here. Prefer a single file; multi-file navigation is currently for bundled apps only.
 - Design for touch, readable text and restrained animation. SVG text does not wrap automatically; use separate `<text>`/`<tspan>` lines.
 
@@ -97,6 +98,7 @@ Device features must be declared as direct children of the manifest:
   <app:permission name="clipboard" reason="Copy a result when requested" />
   <app:permission name="share" reason="Share a result through Android" />
   <app:permission name="haptics" reason="Confirm important actions with gentle feedback" />
+  <app:permission name="files" reason="Import a user-selected text data file" />
 </app:manifest>
 ```
 
@@ -118,10 +120,21 @@ const pasted = await sausage.clipboard.readText(); // string or null
 
 await sausage.share.text({ title: "Beacon", text: "A short result" });
 await sausage.haptics.perform("success"); // light, medium or success
+
+const file = await sausage.files.openText({
+  extensions: [".json", ".md", ".txt"]
+});
+if (file) {
+  // { name, type, size, text }
+  const data = file.name.toLowerCase().endsWith(".json")
+    ? JSON.parse(file.text)
+    : file.text;
+}
 ```
 
 Location is foreground-only. Use `balanced` unless precision is genuinely needed. Scheduled notifications are one-off and inexact, so Android may deliver them late.
 Clipboard and sharing accept plain text only. Haptic patterns are fixed and bounded; documents cannot define arbitrary vibration waveforms.
+Text data import is limited to one user-selected UTF-8 `.json`, `.md` or `.txt` file of at most 1 MB. Cancellation returns `null`. The runtime returns text and metadata, not a file path, and does not automatically render Markdown or bind imported data to screens.
 
 ## Small complete example
 

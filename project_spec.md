@@ -473,6 +473,8 @@ The initial notification baseline implements `sausage.notifications.show({ title
 
 The initial clipboard, share and haptics baseline exposes bounded plain text through `sausage.clipboard.readText()` and `writeText(text)`, launches Android's chooser through `sausage.share.text({ title, text })`, and limits `sausage.haptics.perform(pattern)` to `light`, `medium` or `success`. Each API requires its matching manifest declaration. Rich clipboard formats, direct share targets and author-defined vibration waveforms remain unavailable.
 
+The initial files baseline implements `sausage.files.openText({ extensions })` for one user-selected `.json`, `.md` or `.txt` file. Android's document picker grants access to the selected URI; the runtime validates the requested extension, a 1 MB limit and UTF-8 decoding before returning `{ name, type, size, text }`. Cancellation resolves to `null`. JSON parsing, Markdown interpretation and updates to existing document artwork remain explicit application-script responsibilities.
+
 ### 9.4 Document-to-control state — INITIAL BASELINE PROVEN
 
 Control state MUST be readable and writable through the host API.
@@ -704,7 +706,7 @@ The runtime requests Android permission at first use, or during an explicit appl
 | Clipboard | Bounded plain-text read/write with platform restrictions — INITIAL BASELINE PROVEN |
 | Share | Text through the Android share sheet — INITIAL BASELINE PROVEN |
 | Notifications | Immediate and one-off scheduled local notifications — INITIAL BASELINE PROVEN |
-| Files | User-selected open/save only |
+| Files | User-selected bounded text open — INITIAL BASELINE PROVEN; save proposed |
 | Network | HTTPS to declared origins |
 | Device info | Safe, non-identifying properties |
 | Sensors | PROPOSED: accelerometer and orientation |
@@ -857,7 +859,7 @@ The runtime SHOULD enforce per-application storage quotas and expose usage infor
 
 ## 17. Files and packaging
 
-### 17.1 Version 1 file model — PROPOSED
+### 17.1 Version 1 file model — INITIAL USER-SELECTED TEXT BASELINE PROVEN
 
 The simplest application is a single `.svge` XML file.
 
@@ -866,6 +868,8 @@ Resources MAY be:
 - embedded as data URIs;
 - referenced using paths relative to the document;
 - loaded from declared HTTPS origins.
+
+The initial import API deliberately does not grant arbitrary filesystem access. A document declaring the `files` capability may ask Android to select one `.json`, `.md` or `.txt` file, receive its bounded UTF-8 text and metadata for the current renderer session, and then explicitly update existing SVG or control state. It receives neither a path nor access to sibling files. Automatic data binding, Markdown rendering, YAML parsing and variable-length screen generation remain outside this baseline.
 
 ### 17.2 Multi-file application roots — PROPOSED
 

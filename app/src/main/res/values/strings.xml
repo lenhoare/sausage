@@ -3,14 +3,15 @@
     <string name="app_name">Sausage</string>
     <string name="home_eyebrow">SAUSAGE RUNTIME</string>
     <string name="home_title">Run a graphical journey</string>
-    <string name="home_description">Run an AI-made .svge journey, capture a dream, choose a photo, or try a device-powered Night Beacon.</string>
+    <string name="home_description">Run an AI-made .svge journey, capture a dream, import a data file, or try a device-powered Night Beacon.</string>
     <string name="open_document">Open a .svge file</string>
     <string name="open_document_accessibility">Open a Sausage SVG document from this device</string>
     <string name="open_sample">Open Journey Card</string>
     <string name="open_input_sample">Open Dream Note</string>
     <string name="open_photo_sample">Open Dream Token</string>
     <string name="open_device_sample">Open Night Beacon</string>
-    <string name="home_footer">Slice 17 · Clipboard, sharing and haptics</string>
+    <string name="open_data_sample">Open Data Deck</string>
+    <string name="home_footer">Slice 18 · JSON, Markdown and text import</string>
     <string name="document_accessibility">Sausage document: %1$s</string>
     <string name="document_load_error_title">Couldn’t open this journey</string>
     <string name="document_load_error_message">The bundled Sausage document could not be loaded.</string>

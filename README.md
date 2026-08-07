@@ -38,6 +38,8 @@ The sixteenth slice adds two explicitly declared host capabilities. `sausage.loc
 
 The seventeenth slice adds three small manifest-gated device services. `sausage.clipboard.readText()` and `writeText(text)` exchange bounded plain text with Android's clipboard, `sausage.share.text({ title, text })` opens the system share sheet without revealing target applications to the document, and `sausage.haptics.perform(pattern)` offers only the bounded `light`, `medium` and `success` feedback patterns. Night Beacon demonstrates all three; arbitrary clipboard formats, direct sharing targets and custom vibration waveforms remain unavailable.
 
+The eighteenth slice adds user-selected text data import through `sausage.files.openText({ extensions })`. Android's system picker grants access to one `.json`, `.md` or `.txt` file, and the runtime returns `{ name, type, size, text }` without exposing a filesystem path. Files must be UTF-8 and no larger than 1 MB; cancellation resolves to `null`, while invalid files reject the promise. [`data-deck.svge`](app/src/main/assets/data-deck.svge) parses JSON with ordinary `JSON.parse` or treats Markdown and plain text as meaningful lines, then fills four predeclared SVG cards. Matching [JSON](examples/data-deck.json) and [Markdown](examples/data-deck.md) examples exercise both paths.
+
 Current external-document limits:
 
 - maximum size of 5 MB;

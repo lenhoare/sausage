@@ -1,0 +1,22 @@
+{
+  "title": "Four small signals",
+  "subtitle": "A generated JSON file filling existing SVG cards.",
+  "cards": [
+    {
+      "label": "Notice",
+      "detail": "Pay attention to one detail you nearly missed."
+    },
+    {
+      "label": "Name",
+      "detail": "Give the detail a short and memorable name."
+    },
+    {
+      "label": "Connect",
+      "detail": "Link it to something you already understand."
+    },
+    {
+      "label": "Keep",
+      "detail": "Choose whether this idea deserves another visit."
+    }
+  ]
+}

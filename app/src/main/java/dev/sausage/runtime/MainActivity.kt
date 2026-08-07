@@ -49,6 +49,7 @@ class MainActivity : Activity() {
     private var webView: WebView? = null
     private var databaseBridge: SausageDatabaseBridge? = null
     private var photoFileCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingTextFileRequest: PendingTextFileRequest? = null
     private var currentDocument: SausageDocument? = null
     private val documentBackStack = ArrayDeque<SausageDocument>()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -249,6 +250,18 @@ class MainActivity : Activity() {
             ),
         )
         content.addView(
+            actionButton(
+                label = getString(R.string.open_data_sample),
+                primary = false,
+                onClick = ::openDataSample,
+            ),
+            linearParams(
+                width = ViewGroup.LayoutParams.MATCH_PARENT,
+                height = dp(58),
+                topMargin = dp(14),
+            ),
+        )
+        content.addView(
             TextView(this).apply {
                 text = getString(R.string.home_footer)
                 setTextColor(SUBTLE_TEXT)
@@ -309,6 +322,10 @@ class MainActivity : Activity() {
             )
             return
         }
+        if (requestCode == OPEN_TEXT_FILE_REQUEST) {
+            finishTextFileRequest(resultCode, data)
+            return
+        }
         if (requestCode != OPEN_DOCUMENT_REQUEST || resultCode != RESULT_OK) return
 
         val uri = data?.data ?: run {
@@ -353,6 +370,10 @@ class MainActivity : Activity() {
 
     private fun openDeviceSample() {
         openBundledDocument(DEVICE_DOCUMENT)
+    }
+
+    private fun openDataSample() {
+        openBundledDocument(DATA_DOCUMENT)
     }
 
     private fun openBundledDocument(assetName: String) {
@@ -449,6 +470,12 @@ class MainActivity : Activity() {
                 runOnUiThread { performHaptic(document, requestId, pattern) }
             },
         )
+        val documentFiles = SausageFilesBridge(
+            capabilities = document.capabilities,
+            openTextFile = { requestId, extensions ->
+                runOnUiThread { openTextFilePicker(document, requestId, extensions) }
+            },
+        )
 
         val view = WebView(this).apply {
             contentDescription = getString(R.string.document_accessibility, document.displayName)
@@ -487,6 +514,10 @@ class MainActivity : Activity() {
             addJavascriptInterface(
                 documentDevice,
                 SausageDeviceBridge.JAVASCRIPT_NAME,
+            )
+            addJavascriptInterface(
+                documentFiles,
+                SausageFilesBridge.JAVASCRIPT_NAME,
             )
 
             webChromeClient = object : WebChromeClient() {
@@ -599,6 +630,60 @@ class MainActivity : Activity() {
             arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
         requestPermissions(permissions, LOCATION_PERMISSION_REQUEST)
+    }
+
+    private fun openTextFilePicker(
+        document: SausageDocument,
+        requestId: String,
+        extensions: Set<String>,
+    ) {
+        if (screen != Screen.DOCUMENT || currentDocument !== document) return
+        if (pendingTextFileRequest != null) {
+            completeHostRequest(document, requestId, error = "A text file picker is already open.")
+            return
+        }
+        pendingTextFileRequest = PendingTextFileRequest(document, requestId, extensions)
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivityForResult(intent, OPEN_TEXT_FILE_REQUEST)
+        } catch (error: Exception) {
+            pendingTextFileRequest = null
+            Log.w(TAG, "Unable to open text file picker", error)
+            completeHostRequest(document, requestId, error = "Android could not open the file picker.")
+        }
+    }
+
+    private fun finishTextFileRequest(
+        resultCode: Int,
+        data: Intent?,
+    ) {
+        val request = pendingTextFileRequest ?: return
+        pendingTextFileRequest = null
+        if (screen != Screen.DOCUMENT || currentDocument !== request.document) return
+        if (resultCode != RESULT_OK) {
+            completeHostRequest(request.document, request.requestId, value = null)
+            return
+        }
+        val uri = data?.data
+        if (uri == null) {
+            completeHostRequest(request.document, request.requestId, error = "Android did not return a file.")
+            return
+        }
+        try {
+            val file = SausageTextFileReader.fromUri(contentResolver, uri, request.extensions)
+            completeHostRequest(request.document, request.requestId, value = file.toJson())
+        } catch (error: SausageTextFileException) {
+            Log.w(TAG, "Rejected text data file", error)
+            completeHostRequest(
+                request.document,
+                request.requestId,
+                error = error.message ?: "The selected text file could not be opened.",
+            )
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -1029,6 +1114,9 @@ class MainActivity : Activity() {
         if (departingDocument != null) {
             pendingNotificationActions.removeIf { it.document === departingDocument }
         }
+        if (pendingTextFileRequest?.document === departingDocument) {
+            pendingTextFileRequest = null
+        }
         photoFileCallback?.onReceiveValue(null)
         photoFileCallback = null
         webView?.let { view ->
@@ -1039,6 +1127,7 @@ class MainActivity : Activity() {
             view.removeJavascriptInterface(SausageDatabaseBridge.JAVASCRIPT_NAME)
             view.removeJavascriptInterface(SausageNavigationBridge.JAVASCRIPT_NAME)
             view.removeJavascriptInterface(SausageDeviceBridge.JAVASCRIPT_NAME)
+            view.removeJavascriptInterface(SausageFilesBridge.JAVASCRIPT_NAME)
             view.destroy()
         }
         databaseBridge?.close()
@@ -1100,6 +1189,12 @@ class MainActivity : Activity() {
         val precise: Boolean,
     )
 
+    private data class PendingTextFileRequest(
+        val document: SausageDocument,
+        val requestId: String,
+        val extensions: Set<String>,
+    )
+
     private sealed interface PendingNotificationAction {
         val document: SausageDocument
         val requestId: String
@@ -1136,6 +1231,7 @@ class MainActivity : Activity() {
               const nativeDatabase = window.${SausageDatabaseBridge.JAVASCRIPT_NAME};
               const nativeNavigation = window.${SausageNavigationBridge.JAVASCRIPT_NAME};
               const nativeDevice = window.${SausageDeviceBridge.JAVASCRIPT_NAME};
+              const nativeFiles = window.${SausageFilesBridge.JAVASCRIPT_NAME};
               const nativeControls = window.__sausageControls || null;
               const requireKey = (key, kind) => {
                 const value = String(key);
@@ -1439,6 +1535,37 @@ class MainActivity : Activity() {
                   });
                 },
               });
+              const files = Object.freeze({
+                openText(options = {}) {
+                  return Promise.resolve().then(() => {
+                    if (!options || typeof options !== 'object' || Array.isArray(options)) {
+                      throw new TypeError('Text file options must be an object.');
+                    }
+                    const extensions = options.extensions == null
+                      ? ['.json', '.md', '.txt']
+                      : options.extensions;
+                    if (!Array.isArray(extensions) || extensions.length < 1 || extensions.length > 3) {
+                      throw new RangeError('Choose between one and three text file extensions.');
+                    }
+                    const normalised = extensions.map((extension) => {
+                      if (typeof extension !== 'string') {
+                        throw new TypeError('Text file extensions must be strings.');
+                      }
+                      const value = extension.toLowerCase();
+                      if (value !== '.json' && value !== '.md' && value !== '.txt') {
+                        throw new RangeError('Supported text file extensions are .json, .md and .txt.');
+                      }
+                      return value;
+                    });
+                    if (new Set(normalised).size !== normalised.length) {
+                      throw new RangeError('Text file extensions may not be repeated.');
+                    }
+                    return hostRequest((requestId) =>
+                      nativeFiles.openText(requestId, JSON.stringify(normalised))
+                    );
+                  });
+                },
+              });
 
               Object.defineProperty(window, 'sausage', {
                 value: Object.freeze({
@@ -1451,6 +1578,7 @@ class MainActivity : Activity() {
                   clipboard,
                   share,
                   haptics,
+                  files,
                 }),
                 writable: false,
                 configurable: false,
@@ -1472,11 +1600,13 @@ class MainActivity : Activity() {
         private const val OPEN_PHOTO_REQUEST = 1002
         private const val LOCATION_PERMISSION_REQUEST = 1003
         private const val NOTIFICATION_PERMISSION_REQUEST = 1004
+        private const val OPEN_TEXT_FILE_REQUEST = 1005
         private const val FUSED_LOCATION_PROVIDER = "fused"
         private const val BUNDLED_DOCUMENT = "first-card.svge"
         private const val INPUT_DOCUMENT = "dream-note.svge"
         private const val PHOTO_DOCUMENT = "dream-token.svge"
         private const val DEVICE_DOCUMENT = "night-beacon.svge"
+        private const val DATA_DOCUMENT = "data-deck.svge"
         private const val LOCATION_TIMEOUT_MILLIS = 15_000L
         private const val MAX_CLIPBOARD_TEXT_LENGTH = 16_384
 
